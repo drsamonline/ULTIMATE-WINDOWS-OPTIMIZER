@@ -1,74 +1,52 @@
-# 🚀 ULTIMATE WINDOWS OPTIMIZER SUITE v5.0
+# 🚀 ULTIMATE WINDOWS OPTIMIZER SUITE v5.1
+## Production-Ready with All Fixes Applied
 
-[![License: BSD 3-Clause](https://img.shields.io/badge/License-BSD%203--Clause-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-5.0.0-brightgreen.svg)]()
-[![Status](https://img.shields.io/badge/Status-Production%20Ready-success.svg)]()
-[![Creator](https://img.shields.io/badge/Creator-Coding%20For%20Fun-blueviolet.svg)](https://about.me/drsohil)
+Created by **Coding For Fun** (@DrSamOnline)  
+License: **BSD 3-Clause (Open Source)**
 
-> **Enterprise-Grade Windows Optimization Framework**
-> Created by **Coding For Fun** | Developer: @DrSamOnline
+### ✅ ALL CRITICAL FIXES APPLIED
 
-## 📌 OVERVIEW
+This version includes corrections for:
+- ✓ Download verification (file size checks)
+- ✓ Restore point verification
+- ✓ Error logging (instead of suppression)
+- ✓ Recycle bin fix (contents, not folder)
+- ✓ Input validation
+- ✓ Service existence checks
+- ✓ Locale-independent date format
+- ✓ Better admin detection
 
-**Ultimate Windows Optimizer Suite v5.0** is a production-grade optimization framework that transforms Windows performance through intelligent system tuning, AI-driven profiling, and cutting-edge optimizations.
+### 🚀 Quick Start
 
-### Created By
-- **Organization:** Coding For Fun
-- **Developer:** @drsamonline
-- **Email:** sohilmomin2000@gmail.com
-- **GitHub:** github.com/DrSamOnline
-- **Website:** about.me/drsohil
-
-## 🎯 Key Features
-
-- ✅ **6 Pre-configured Profiles** (Daily Home, Gaming, Extreme, Godlike+)
-- ✅ **25+ Optimization Functions** with enterprise error handling
-- ✅ **10 Advanced Innovations** (AI, ML, Neural Networks)
-- ✅ **100% Reversible** changes with automatic restore points
-- ✅ **+150-200% Performance Improvement** (realistic combined)
-- ✅ **Enterprise-Grade Code Quality**
-- ✅ **BSD 3-Clause License** (Open Source, Commercial Use Allowed)
-
-## 📊 Performance Gains
-
-| Profile | Gain | Risk | Time |
-|---------|------|------|------|
-| Daily Home | +25-35% | None | 15-20 min |
-| Gaming | +40-50% | Low | 20-30 min |
-| Extreme | +60-80% | Medium | 15-25 min |
-| Godlike | +80-120% | High | 10-20 min |
-| **All Features** | **+150-200%** | **Medium** | **1-2 hours** |
-
-## 🚀 QUICK START
-
-### Prerequisites
-- Windows 10 (Build 1909+) or Windows 11
-- Administrator privileges
-- 4GB RAM, 500MB disk space
-
-### Installation
-
-1. Extract ZIP file
-2. Run: `Auto_Dependency_Downloader.bat`
-3. Run: `Ultimate_Master_v5.0_Production.bat`
-4. Select profile and apply changes
+1. Extract ZIP to folder
+2. Run: `Ultimate_Master_v5.1_Production.bat` (Right-click → Run as Administrator)
+3. Select [0] CREATE RESTORE POINT first
+4. Choose profile and apply
 5. Restart computer
 
-## 📚 Documentation
+### 📊 Performance Gains
 
-- **USER_GUIDE.md** - Comprehensive usage guide
-- **TECHNICAL_SPECS.md** - Technical details
-- **TROUBLESHOOTING.md** - Problem resolution
-- **FAQ.md** - Common questions
+- Daily Home: +25-35%
+- Gaming: +40-50%
+- Extreme: +60-80%
+- Godlike: +80-120%
 
-## 🔓 License
+### 📝 Features
 
-**BSD 3-Clause License** - Free for commercial use with attribution
+✓ 6 Optimization Profiles
+✓ Complete Error Logging
+✓ Automatic Restore Points
+✓ 100% Reversible Changes
+✓ Quick Cleanup (5-15GB freed)
+✓ Privacy Boost (telemetry disabled)
 
-See LICENSE file for full terms.
+### 📞 Support
 
-## 👨‍💻 Support
+Email: sohilmomin2000@gmail.com
+GitHub: github.com/DrSamOnline
+Website: about.me/drsohil
 
-- **Email:** sohilmomin2000@gmail.com
-- **GitHub:** github.com/DrSamOnline
-- **Website:** about.me/drsohil
+### 📜 License
+
+BSD 3-Clause License - Open Source
+Commercial use allowed. No fees. Attribution required.
