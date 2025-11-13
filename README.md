@@ -14,7 +14,7 @@
 
 ### Created By
 - **Organization:** Coding For Fun
-- **Developer:** @DrSamOnline
+- **Developer:** @drsamonline
 - **Email:** sohilmomin2000@gmail.com
 - **GitHub:** github.com/DrSamOnline
 - **Website:** about.me/drsohil
