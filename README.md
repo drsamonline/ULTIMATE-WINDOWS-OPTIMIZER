@@ -77,33 +77,61 @@ These instructions will guide you through setting up and using the optimizer sui
 ## File Structure
 
 Ultimate_Windows_Optimizer_v5.1/
+
 │
+
 ├── scripts/
+
 │ ├── 00_Ultimate_Master_v5.1_Production.bat # Main interactive menu
+
 │ ├── 01_Auto_Dependency_Downloader_FINAL.bat # Auto downloader for tools
+
 │ ├── 02_Undo_Last_Change.bat # Undo last applied optimization
+
 │ ├── 03_Full_System_Rollback.bat # System restore rollback batch
+
 │ ├── Optimize-*.ps1 # PowerShell profile modules
+
 │ ├── Advanced-Modules.ps1 # 8 advanced system modules
+
 │ ├── 04_Compare_Results.ps1 # Before/after performance compare
+
 │ ├── Hardware-Detection.ps1 # Detect CPU, GPU, RAM etc.
+
 │ ├── Compatibility-Check.ps1 # Check Windows compatibility
+
 │ ├── Performance-Monitor.ps1 # Real-time performance monitoring
+
 │ ├── Undo-All-Changes.ps1 # Undo all PowerShell changes
+
 │ ├── System-Rollback.ps1 # Advanced rollback PowerShell script
+
 │ ├── Cleanup-System.ps1 # System cleanup PowerShell script
+
 │
+
 ├── README.md # This file
+
 ├── QUICK_START.txt # Quick setup guide
+
 ├── INSTALLATION_GUIDE.md # Detailed setup and troubleshooting
+
 ├── FEATURES_COMPLETE.txt # Comprehensive feature list
+
 ├── TROUBLESHOOTING.txt # Troubleshooting guide
+
 ├── ADVANCED_OPTIONS.txt # Advanced usage and scheduling guide
+
 ├── AUDIT_FIXES_APPLIED.txt # Audit report and fix summary
+
 ├── LICENSE # BSD 3-Clause license
+
 │
+
 └── Dependencies/
+
 └── README.txt # Info on downloaded utilities
+
 
 
 ---
