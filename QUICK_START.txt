@@ -1,0 +1,36 @@
+ULTIMATE WINDOWS OPTIMIZER v6.0 - QUICK START
+================================================
+
+1. Extract the ZIP anywhere on your PC.
+
+2. Right-click "scripts\00_Ultimate_Master_v6.0.bat" and choose
+   "Run as administrator". (Required - the tool will exit if not elevated.)
+
+3. From the menu, run these first, in order:
+      [9] Compatibility Check   - confirms your PC meets requirements
+      [S] Create System Restore Point - safety net for the whole system
+      [M] Performance Snapshot  - label it "Baseline"
+
+4. Choose the profile that matches your machine:
+      [1] Daily Home   - general home/family use
+      [2] Gaming       - desktop gaming rigs
+      [3] Office       - work/productivity machines
+      [4] Laptop       - any battery-powered laptop
+      [5] Extreme      - high-end desktops, RAM/SSD checked automatically
+      [6] Godlike      - maximum aggression, desktop only, asks for confirmation
+      [7] Server       - headless/background-service machines
+      [8] Streaming    - gaming + OBS/streaming software together
+
+5. (Optional) Take another snapshot [M], label it something like
+   "AfterGaming", then choose [R] to see the real, measured before/after
+   difference in CPU load, RAM usage, and disk space.
+
+6. Anytime you want everything this toolkit changed reverted exactly:
+      [U] UNDO ALL TRACKED CHANGES
+
+Logs are saved to:  %USERPROFILE%\OptimizationLogs
+Backups are saved to: %USERPROFILE%\OptimizationLogs\Backups
+
+No profile promises a specific percentage improvement - actual results
+depend on your hardware and workload. Use the snapshot/compare tools to
+measure your own machine.
