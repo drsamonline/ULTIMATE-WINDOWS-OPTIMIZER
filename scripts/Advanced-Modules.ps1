@@ -28,9 +28,15 @@ $failed = 0
 foreach ($m in $modules) {
     Write-Host "Running: $($m.Name)..." -NoNewline
     try {
-        Invoke-Tweak -Key $m.Key -LogFile $logFile -BackupFile $backupFile
-        Write-Host " OK" -ForegroundColor Green
-        $succeeded++
+        $tweakOk = Invoke-Tweak -Key $m.Key -LogFile $logFile -BackupFile $backupFile
+        if ($tweakOk) {
+            Write-Host " OK" -ForegroundColor Green
+            $succeeded++
+        } else {
+            Write-Host " FAILED (returned false - see log)" -ForegroundColor Red
+            Write-Log -Message "$($m.Name) reported failure (tweak returned false)" -LogFile $logFile -Level ERROR
+            $failed++
+        }
     } catch {
         Write-Host " FAILED: $($_.Exception.Message)" -ForegroundColor Red
         Write-Log -Message "$($m.Name) failed: $($_.Exception.Message)" -LogFile $logFile -Level ERROR

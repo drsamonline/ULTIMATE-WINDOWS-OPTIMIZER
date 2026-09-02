@@ -52,9 +52,60 @@ foreach ($tweak in $tweaks) {
         }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }
+    elseif ($Global:TweakMultiServiceMap.ContainsKey($tweak)) {
+        # Multi-service tweak (e.g. DisableXboxServices): all listed services must
+        # match the expected start mode for the tweak to count as 'Applied'.
+        $spec = $Global:TweakMultiServiceMap[$tweak]
+        $notMatching = @()
+        $notFound = @()
+        foreach ($svcName in $spec.ServiceNames) {
+            try {
+                $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='$svcName'" -ErrorAction Stop
+                if ($svc.StartMode -ne $spec.ExpectedStartMode) {
+                    $notMatching += "$svcName=$($svc.StartMode)"
+                }
+            } catch {
+                $notFound += $svcName
+            }
+        }
+        if ($notFound.Count -gt 0) {
+            $status = "Not Applied (services not found: $($notFound -join ', '))"
+        } elseif ($notMatching.Count -gt 0) {
+            $status = "Not Applied (mismatched: $($notMatching -join ', '); expected: $($spec.ExpectedStartMode))"
+        } else {
+            $status = 'Applied'
+        }
+        $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
+    }
+    elseif ($Global:TweakPowerPlanMap.ContainsKey($tweak)) {
+        # Power-plan tweak: parse the active scheme GUID and compare against
+        # the well-known alias GUIDs (SCHEME_MIN = High Performance, SCHEME_BALANCED = Balanced).
+        $expectedAlias = $Global:TweakPowerPlanMap[$tweak]
+        try {
+            $active = (powercfg.exe /getactivescheme) -join ''
+            $isActive = $false
+            switch ($expectedAlias) {
+                'SCHEME_MIN'      { $isActive = $active -match 'High Performance' -or $active -match '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' }
+                'SCHEME_BALANCED'  { $isActive = $active -match 'Balanced' -or $active -match '381b4222-f694-41f0-9685-ff5bb260df2e' }
+            }
+            $status = if ($isActive) { 'Applied' } else { "Not Applied (current active scheme: $active)" }
+        } catch {
+            $status = 'Unknown (powercfg /getactivescheme failed)'
+        }
+        $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
+    }
+    elseif ($tweak -eq 'DisableHibernation') {
+        # Hibernation is 'applied' (i.e. disabled) when powercfg reports it as off.
+        try {
+            $hbnOut = (powercfg.exe /a) -join ''
+            $isOff = $hbnOut -match 'Hibernation has been disabled' -or ($hbnOut -split '`n' | Where-Object { $_ -match 'Hibernation' -and $_ -match 'Unavailable' }).Count -gt 0
+            $status = if ($isOff) { 'Applied' } else { 'Not Applied (hibernation still enabled)' }
+        } catch {
+            $status = 'Unknown (powercfg /a failed)'
+        }
+        $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
+    }
     else {
-        # Tweaks like PowerPlanHighPerformance, DisableHibernation, PowerPlanBalanced, DisableStartMenuSuggestions
-        # (multi-value) aren't single-value-checkable here; verified as "Unknown - check manually".
         $results += [pscustomobject]@{ Tweak = $tweak; Status = 'Unknown (not automatically verifiable - check manually via Settings/powercfg)' }
     }
 }

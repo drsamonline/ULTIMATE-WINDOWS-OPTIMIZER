@@ -85,7 +85,10 @@ function New-BackupFile {
     param([Parameter(Mandatory)][string]$Name)
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $path = Join-Path $Script:BackupDir "$Name`_$timestamp.json"
-    @() | ConvertTo-Json | Set-Content -Path $path
+    # Write a literal '[]' so the file is a valid empty JSON array.
+    # (Piping @() to ConvertTo-Json produces no output on PowerShell 5.1,
+    #  which left the file empty and broke every downstream reader.)
+    Set-Content -Path $path -Value '[]' -Encoding UTF8
     return $path
 }
 
@@ -94,9 +97,27 @@ function Add-BackupRecord {
         [Parameter(Mandatory)][string]$BackupFile,
         [Parameter(Mandatory)][hashtable]$Record
     )
-    $records = @(Get-Content -Path $BackupFile -Raw | ConvertFrom-Json)
+    # Read defensively - an empty or corrupted file should never crash the run.
+    $records = $null
+    try {
+        $raw = Get-Content -Path $BackupFile -Raw
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            $records = @()
+        } else {
+            $records = @(ConvertFrom-Json -InputObject $raw)
+            # ConvertFrom-Json returns $null for an empty literal 'null' or
+            # for an empty file coerced through the pipeline. Normalize.
+            if ($null -eq $records) { $records = @() }
+            # Filter out any spurious $null entries from older backup files
+            # that were created before this fix.
+            $records = @($records | Where-Object { $null -ne $_ })
+        }
+    } catch {
+        Write-Warning "Backup file '$BackupFile' was unreadable ($($_.Exception.Message)); starting a fresh record list."
+        $records = @()
+    }
     $records += [pscustomobject]$Record
-    $records | ConvertTo-Json -Depth 5 | Set-Content -Path $BackupFile
+    $records | ConvertTo-Json -Depth 5 | Set-Content -Path $BackupFile -Encoding UTF8
 }
 
 # ---------------------------------------------------------------------------
@@ -204,15 +225,37 @@ function Set-ServiceStateSafe {
     }
 }
 
+function Invoke-NativeCommand {
+    # Wrapper that runs a native exe and throws on a non-zero exit code.
+    # PowerShell's `&` operator does NOT throw on native-command failures -
+    # without this, tweaks like DisableHibernation / PowerPlan* would silently
+    # record a backup even when the underlying powercfg call failed.
+    param(
+        [Parameter(Mandatory)][string]$ExePath,
+        [string[]]$Arguments = @()
+    )
+    & $ExePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "$ExePath exited with code $LASTEXITCODE"
+    }
+}
+
 function Restore-ServiceBackupRecord {
     param(
         [Parameter(Mandatory)]$Record,
         [Parameter(Mandatory)][string]$LogFile
     )
     try {
+        # Win32_Service StartMode can be: Boot, System, Auto, Manual, Disabled.
+        # Set-Service -StartupType only accepts Automatic/Manual/Disabled/Automatic (Delayed Start).
+        # For Boot/System services (kernel drivers, etc.), Set-Service cannot restore the original
+        # start mode, so we log a clear warning and skip rather than silently downgrading to Manual.
         $startupTypeMap = @{ 'Auto' = 'Automatic'; 'Manual' = 'Manual'; 'Disabled' = 'Disabled' }
         $mapped = $startupTypeMap[$Record.OriginalStartMode]
-        if (-not $mapped) { $mapped = 'Manual' }
+        if (-not $mapped) {
+            Write-Log -Message "Service '$($Record.ServiceName)' original start mode was '$($Record.OriginalStartMode)' (Boot/System) - cannot be restored via Set-Service. Skipping startup-type restore; please verify manually." -LogFile $LogFile -Level WARN
+            return
+        }
         Set-Service -Name $Record.ServiceName -StartupType $mapped -ErrorAction SilentlyContinue
         if ($Record.OriginalStatus -eq 'Running') {
             Start-Service -Name $Record.ServiceName -ErrorAction SilentlyContinue
@@ -290,173 +333,199 @@ function Invoke-Tweak {
 
     switch ($Key) {
 
+        'DisableHibernation' {
+            # Removes hibernation (frees disk space equal to RAM size); NOT applied to laptop profile.
+            # The backup record is only written if powercfg actually succeeds.
+            try {
+                Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/hibernate','off'
+                Write-Log -Message 'Hibernation disabled via powercfg (frees disk space equal to RAM size)' -LogFile $LogFile -Level OK
+                Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'Hibernation'; OriginalState = 'enabled' }
+                return $true
+            } catch {
+                Write-Log -Message "FAILED to disable hibernation: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                return $false
+            }
+        }
+
+        'PowerPlanHighPerformance' {
+            # IMPORTANT: capture the active scheme GUID BEFORE switching -
+            # otherwise we record the new High-Performance GUID, not the user's
+            # original, which makes Undo-All-Changes.ps1 unable to restore it.
+            try {
+                $originalScheme = (powercfg.exe /getactivescheme) -join ''
+                Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/setactive','SCHEME_MIN'
+                Write-Log -Message 'Power plan set to High Performance' -LogFile $LogFile -Level OK
+                Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'PowerPlan'; OriginalGuid = $originalScheme }
+                return $true
+            } catch {
+                Write-Log -Message "FAILED to set High Performance power plan: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                return $false
+            }
+        }
+
+        'PowerPlanBalanced' {
+            # Symmetric backup handling with PowerPlanHighPerformance.
+            try {
+                $originalScheme = (powercfg.exe /getactivescheme) -join ''
+                Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/setactive','SCHEME_BALANCED'
+                Write-Log -Message 'Power plan set to Balanced' -LogFile $LogFile -Level OK
+                Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'PowerPlan'; OriginalGuid = $originalScheme }
+                return $true
+            } catch {
+                Write-Log -Message "FAILED to set Balanced power plan: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                return $false
+            }
+        }
+
+        'DisableXboxServices' {
+            $ok = $true
+            foreach ($svc in @('XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc')) {
+                $stepOk = Set-ServiceStateSafe -ServiceName $svc -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
+                if (-not $stepOk) { $ok = $false }
+            }
+            return $ok
+        }
+
+        'DisableGameDVR' {
+            return Set-RegistryValueSafe -Path 'HKCU:\System\GameConfigStore' -Name 'GameDVR_Enabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
         'DisableTelemetry' {
-            # Connected User Experiences and Telemetry service -> Manual (not fully removed,
-            # some Windows Update components expect it to at least exist)
-            Set-ServiceStateSafe -ServiceName 'DiagTrack' -StartupType Manual -StopNow -LogFile $LogFile -BackupFile $BackupFile
+            return Set-ServiceStateSafe -ServiceName 'DiagTrack' -StartupType Manual -StopNow -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'EnableHAGS' {
-            # Hardware-accelerated GPU Scheduling
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' `
                 -Name 'HwSchMode' -Value 2 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableHAGS' {
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' `
                 -Name 'HwSchMode' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'GamingPriorityBoost' {
-            # Short, variable, high foreground boost - classic, low-risk gaming tweak
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
                 -Name 'Win32PrioritySeparation' -Value 38 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'BalancedPrioritySeparation' {
-            # Windows default - restores standard desktop responsiveness balance
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
                 -Name 'Win32PrioritySeparation' -Value 2 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'ServerPrioritySeparation' {
-            # Short, fixed, no foreground boost - favors consistent background service throughput
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl' `
                 -Name 'Win32PrioritySeparation' -Value 24 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableNetworkThrottling' {
-            # Removes the ~10Mbps reservation throttle for multimedia; useful for gaming/streaming
-            Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
                 -Name 'NetworkThrottlingIndex' -Value 0xffffffff -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'LowerSystemResponsivenessForMultimedia' {
-            # Reduces the % of CPU reserved away from multimedia tasks - benefits streaming/recording
-            Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile' `
                 -Name 'SystemResponsiveness' -Value 10 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableStartupDelay' {
-            Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' `
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize' `
                 -Name 'StartupDelayInMSec' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableStartMenuSuggestions' {
             $base = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
-            Set-RegistryValueSafe -Path $base -Name 'SubscribedContent-338388Enabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
-            Set-RegistryValueSafe -Path $base -Name 'SystemPaneSuggestionsEnabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            $ok1 = Set-RegistryValueSafe -Path $base -Name 'SubscribedContent-338388Enabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            $ok2 = Set-RegistryValueSafe -Path $base -Name 'SystemPaneSuggestionsEnabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            return ($ok1 -and $ok2)
         }
 
         'DisableBackgroundApps' {
-            Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' `
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' `
                 -Name 'GlobalUserDisabled' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'VisualEffectsBestPerformance' {
-            Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
                 -Name 'VisualFXSetting' -Value 2 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'VisualEffectsBalanced' {
-            Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
                 -Name 'VisualFXSetting' -Value 3 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableSysMain' {
-            # Superfetch/Prefetch - recommended only on SSD systems; profiles gate this via RAM/SSD checks upstream
-            Set-ServiceStateSafe -ServiceName 'SysMain' -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
+            return Set-ServiceStateSafe -ServiceName 'SysMain' -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisablePagingExecutive' {
-            # Keeps kernel-mode code resident in RAM. Only applied to profiles that verify >=16GB RAM.
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management' `
                 -Name 'DisablePagingExecutive' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
-        'DisableHibernation' {
-            # Removes hibernation (frees disk space equal to RAM size); NOT applied to laptop profile
-            try {
-                & powercfg.exe /hibernate off
-                Write-Log -Message 'Hibernation disabled via powercfg (frees disk space equal to RAM size)' -LogFile $LogFile -Level OK
-                Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'Hibernation'; OriginalState = 'enabled' }
-            } catch {
-                Write-Log -Message "FAILED to disable hibernation: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
-            }
-        }
-
-        'PowerPlanHighPerformance' {
-            try {
-                & powercfg.exe /setactive SCHEME_MIN
-                Write-Log -Message 'Power plan set to High Performance' -LogFile $LogFile -Level OK
-                Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'PowerPlan'; OriginalGuid = (powercfg /getactivescheme) }
-            } catch {
-                Write-Log -Message "FAILED to set High Performance power plan: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
-            }
-        }
-
-        'PowerPlanBalanced' {
-            try {
-                & powercfg.exe /setactive SCHEME_BALANCED
-                Write-Log -Message 'Power plan set to Balanced' -LogFile $LogFile -Level OK
-            } catch {
-                Write-Log -Message "FAILED to set Balanced power plan: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
-            }
-        }
-
         'EnableUSBSelectiveSuspend' {
-            Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' `
+            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' `
                 -Name 'CsEnabled' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableSearchIndexingService' {
-            # Not recommended on desktops that rely on Windows Search; suited to headless server profile
-            Set-ServiceStateSafe -ServiceName 'WSearch' -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
-        }
-
-        'DisableXboxServices' {
-            foreach ($svc in @('XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc')) {
-                Set-ServiceStateSafe -ServiceName $svc -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
-            }
-        }
-
-        'DisableGameDVR' {
-            Set-RegistryValueSafe -Path 'HKCU:\System\GameConfigStore' -Name 'GameDVR_Enabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            return Set-ServiceStateSafe -ServiceName 'WSearch' -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
         }
 
         default {
             Write-Log -Message "Unknown tweak key '$Key' - skipped" -LogFile $LogFile -Level WARN
+            return $false
         }
     }
 }
 
 # ---------------------------------------------------------------------------
-# Central registry-check map used by Verify-System.ps1.
-# Each entry: registry Path + Name + the value that means "tweak is applied".
-# Only covers the tweaks that are simple registry checks (service-based and
-# powercfg-based tweaks are checked separately in Verify-System.ps1).
+# Central verification maps used by Verify-System.ps1.
+# Each registry entry: Path + Name + the value that means "tweak is applied".
+# Each service entry: ServiceName + the ExpectedStartMode that means "applied".
+# Power-plan & hibernation tweaks are checked separately in Verify-System.ps1
+# via powercfg (not single-value-checkable here).
 # ---------------------------------------------------------------------------
 $Global:TweakVerificationMap = @{
-    'EnableHAGS'                  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; ExpectedValue = 2 }
-    'DisableHAGS'                  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; ExpectedValue = 1 }
-    'GamingPriorityBoost'         = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 38 }
-    'BalancedPrioritySeparation'  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 2 }
-    'ServerPrioritySeparation'    = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 24 }
-    'DisableNetworkThrottling'    = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'NetworkThrottlingIndex'; ExpectedValue = 0xffffffff }
-    'LowerSystemResponsivenessForMultimedia' = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'SystemResponsiveness'; ExpectedValue = 10 }
-    'DisableStartupDelay'         = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize'; Name = 'StartupDelayInMSec'; ExpectedValue = 0 }
-    'DisableBackgroundApps'       = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications'; Name = 'GlobalUserDisabled'; ExpectedValue = 1 }
-    'VisualEffectsBestPerformance'= @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; ExpectedValue = 2 }
-    'VisualEffectsBalanced'       = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; ExpectedValue = 3 }
-    'DisablePagingExecutive'      = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'; Name = 'DisablePagingExecutive'; ExpectedValue = 1 }
-    'EnableUSBSelectiveSuspend'   = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'; Name = 'CsEnabled'; ExpectedValue = 1 }
-    'DisableGameDVR'              = @{ Path = 'HKCU:\System\GameConfigStore'; Name = 'GameDVR_Enabled'; ExpectedValue = 0 }
+    'EnableHAGS'                              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; ExpectedValue = 2 }
+    'DisableHAGS'                              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; ExpectedValue = 1 }
+    'GamingPriorityBoost'                     = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 38 }
+    'BalancedPrioritySeparation'              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 2 }
+    'ServerPrioritySeparation'                = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 24 }
+    'DisableNetworkThrottling'                = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'NetworkThrottlingIndex'; ExpectedValue = 0xffffffff }
+    'LowerSystemResponsivenessForMultimedia'  = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'SystemResponsiveness'; ExpectedValue = 10 }
+    'DisableStartupDelay'                     = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize'; Name = 'StartupDelayInMSec'; ExpectedValue = 0 }
+    'DisableStartMenuSuggestions'              = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SubscribedContent-338388Enabled'; ExpectedValue = 0 }
+    'DisableBackgroundApps'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications'; Name = 'GlobalUserDisabled'; ExpectedValue = 1 }
+    'VisualEffectsBestPerformance'             = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; ExpectedValue = 2 }
+    'VisualEffectsBalanced'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; ExpectedValue = 3 }
+    'DisablePagingExecutive'                  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'; Name = 'DisablePagingExecutive'; ExpectedValue = 1 }
+    'EnableUSBSelectiveSuspend'               = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'; Name = 'CsEnabled'; ExpectedValue = 1 }
+    'DisableGameDVR'                          = @{ Path = 'HKCU:\System\GameConfigStore'; Name = 'GameDVR_Enabled'; ExpectedValue = 0 }
 }
 
+# Tweaks that map to a single service with a single expected StartMode.
 $Global:TweakServiceMap = @{
     'DisableTelemetry'             = @{ ServiceName = 'DiagTrack'; ExpectedStartMode = 'Manual' }
     'DisableSysMain'                = @{ ServiceName = 'SysMain'; ExpectedStartMode = 'Disabled' }
     'DisableSearchIndexingService'  = @{ ServiceName = 'WSearch'; ExpectedStartMode = 'Disabled' }
+}
+
+# Tweaks that map to MULTIPLE services (all must be in the expected start mode
+# for the tweak to count as 'Applied').
+$Global:TweakMultiServiceMap = @{
+    'DisableXboxServices' = @{
+        ServiceNames = @('XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc')
+        ExpectedStartMode = 'Disabled'
+    }
+}
+
+# Tweaks verified via powercfg (parsed at runtime in Verify-System.ps1).
+$Global:TweakPowerPlanMap = @{
+    'PowerPlanHighPerformance' = 'SCHEME_MIN'
+    'PowerPlanBalanced'        = 'SCHEME_BALANCED'
 }
 
 $Global:ProfileDefinitions = @{
@@ -464,8 +533,13 @@ $Global:ProfileDefinitions = @{
     'Gaming'     = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance')
     'Office'     = @('DisableTelemetry','DisableStartMenuSuggestions','DisableBackgroundApps','DisableXboxServices','VisualEffectsBalanced','PowerPlanBalanced','BalancedPrioritySeparation')
     'Laptop'     = @('DisableTelemetry','DisableStartMenuSuggestions','DisableBackgroundApps','DisableHAGS','EnableUSBSelectiveSuspend','VisualEffectsBalanced','PowerPlanBalanced')
-    'Extreme'    = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance','DisableHibernation')
-    'Godlike'    = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance','DisableHibernation','DisableSearchIndexingService','DisableXboxServices')
+    # Extreme/Godlike include the hardware-gated tweaks here in ProfileDefinitions so
+    # Verify-System.ps1 can verify them. The .ps1 profile scripts ALSO append them at
+    # runtime based on RAM/SSD detection - if the gating check fails at runtime, the
+    # .ps1 script will skip them, and Verify-System.ps1 will (correctly) report them
+    # as Not Applied because the runtime guard prevented them from being set.
+    'Extreme'    = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance','DisableHibernation','DisablePagingExecutive','DisableSysMain')
+    'Godlike'    = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance','DisableHibernation','DisableSearchIndexingService','DisableXboxServices','DisablePagingExecutive','DisableSysMain')
     'Server'     = @('DisableTelemetry','DisableSearchIndexingService','DisableXboxServices','DisableHibernation','PowerPlanHighPerformance','VisualEffectsBestPerformance','ServerPrioritySeparation')
     'Streaming'  = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','LowerSystemResponsivenessForMultimedia','PowerPlanHighPerformance','VisualEffectsBestPerformance')
 }
@@ -497,8 +571,12 @@ function Invoke-OptimizationProfile {
     foreach ($tweak in $Tweaks) {
         Write-Log -Message "Applying tweak: $tweak" -LogFile $logFile -Level INFO
         try {
-            Invoke-Tweak -Key $tweak -LogFile $logFile -BackupFile $backupFile
-            $applied++
+            $tweakOk = Invoke-Tweak -Key $tweak -LogFile $logFile -BackupFile $backupFile
+            if ($tweakOk) {
+                $applied++
+            } else {
+                $failed++
+            }
         } catch {
             Write-Log -Message "Tweak '$tweak' threw an error: $($_.Exception.Message)" -LogFile $logFile -Level ERROR
             $failed++

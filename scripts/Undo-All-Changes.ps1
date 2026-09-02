@@ -45,7 +45,27 @@ $failedCount = 0
 
 foreach ($file in $backupFiles) {
     Write-Log -Message "Processing backup file: $($file.Name)" -LogFile $logFile -Level INFO
-    $records = @(Get-Content -Path $file.FullName -Raw | ConvertFrom-Json)
+    try {
+        $raw = Get-Content -Path $file.FullName -Raw
+        if ([string]::IsNullOrWhiteSpace($raw)) {
+            Write-Log -Message "Backup file '$($file.Name)' is empty - skipped" -LogFile $logFile -Level WARN
+            if (-not $WhatIf) {
+                Move-Item -Path $file.FullName -Destination (Join-Path $archiveDir $file.Name) -Force
+            }
+            continue
+        }
+        $records = @(ConvertFrom-Json -InputObject $raw)
+        # Filter out any spurious $null entries that could exist in older
+        # backup files written before the Add-BackupRecord null-coercion fix.
+        $records = @($records | Where-Object { $null -ne $_ })
+    } catch {
+        Write-Log -Message "Backup file '$($file.Name)' could not be parsed: $($_.Exception.Message) - skipped" -LogFile $logFile -Level ERROR
+        $failedCount++
+        if (-not $WhatIf) {
+            Move-Item -Path $file.FullName -Destination (Join-Path $archiveDir $file.Name) -Force
+        }
+        continue
+    }
 
     foreach ($record in $records) {
         if ($WhatIf) {
@@ -62,7 +82,29 @@ foreach ($file in $backupFiles) {
                     $restoredCount++
                 }
                 'PowerPlan' {
-                    Write-Log -Message "Power plan was recorded as: $($record.OriginalGuid) - restore manually via Control Panel > Power Options if needed" -LogFile $logFile -Level WARN
+                    # Parse the GUID out of the recorded 'powercfg /getactivescheme'
+                    # output (e.g. 'Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High Performance)').
+                    # If parsing fails, fall back to the original warning.
+                    $guid = $null
+                    if ($record.OriginalGuid) {
+                        $match = [regex]::Match($record.OriginalGuid.ToString(), '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})')
+                        if ($match.Success) { $guid = $match.Groups[1].Value }
+                    }
+                    if ($guid) {
+                        try {
+                            & powercfg.exe /setactive $guid
+                            if ($LASTEXITCODE -eq 0) {
+                                Write-Log -Message "Power plan restored to original GUID: $guid" -LogFile $logFile -Level OK
+                                $restoredCount++
+                            } else {
+                                Write-Log -Message "powercfg /setactive $guid exited with code $LASTEXITCODE - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
+                            }
+                        } catch {
+                            Write-Log -Message "Failed to restore power plan via powercfg: $($_.Exception.Message) - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
+                        }
+                    } else {
+                        Write-Log -Message "Power plan original GUID could not be parsed from recorded value: '$($record.OriginalGuid)' - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
+                    }
                 }
                 default {
                     Write-Log -Message "Unknown backup record type '$($record.Type)' - skipped" -LogFile $logFile -Level WARN

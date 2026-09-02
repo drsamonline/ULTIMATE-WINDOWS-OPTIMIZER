@@ -28,7 +28,7 @@ Test-Item -Name 'Administrator privileges' -Check { Test-IsAdmin } `
 Test-Item -Name 'Windows version' -Check { [int]$os.BuildNumber -ge 17763 } `
     -PassDesc "Build $($os.BuildNumber) ($($os.Caption))" -FailDesc "Build $($os.BuildNumber) is older than the minimum supported build (17763 / Windows 10 1809)"
 
-Test-Item -Name 'PowerShell version' -Check { $psVersion.Major -ge 5 } `
+Test-Item -Name 'PowerShell version' -Check { $psVersion -ge [version]'5.1' } `
     -PassDesc "PowerShell $psVersion" -FailDesc "PowerShell $psVersion detected - version 5.1+ required"
 
 Test-Item -Name 'RAM' -Check { $ramGB -ge 4 } `
@@ -38,9 +38,21 @@ Test-Item -Name 'Free disk space on system drive' -Check { $freeSpaceGB -ge 1 } 
     -PassDesc "${freeSpaceGB}GB free on $($env:SystemDrive)" -FailDesc "${freeSpaceGB}GB free - at least 1GB recommended for logs/restore points"
 
 Test-Item -Name 'System Restore availability' -Check {
-        (Get-CimInstance -Namespace root/default -ClassName SystemRestore -ErrorAction SilentlyContinue) -ne $null -or
-        (Get-Command -Name Checkpoint-Computer -ErrorAction SilentlyContinue) -ne $null
-    } -PassDesc 'Checkpoint-Computer cmdlet available' -FailDesc 'System Restore cmdlets unavailable on this SKU - create a manual backup instead'
+        # Real check: query SystemRestoreConfig in the root/default namespace.
+        # RPSessionInterval > 0 means System Restore is enabled on the system.
+        # If the WMI query itself fails, fall back to the cmdlet availability check
+        # (still a useful signal even if weaker).
+        $cfg = Get-CimInstance -Namespace root/default -ClassName SystemRestoreConfig -ErrorAction SilentlyContinue
+        if ($cfg -and $cfg.RPSessionInterval -ne $null -and $cfg.RPSessionInterval -gt 0) { return $true }
+        # Fallback: try to actually enumerate restore points for the system drive.
+        try {
+            $points = Get-ComputerRestorePoint -ErrorAction Stop
+            return $true
+        } catch {
+            # As a last resort, see if the cmdlet exists (weaker signal).
+            return ((Get-Command -Name Checkpoint-Computer -ErrorAction SilentlyContinue) -ne $null)
+        }
+    } -PassDesc 'System Restore enabled on system drive' -FailDesc 'System Restore is disabled or unavailable on this drive - enable it in System Properties > System Protection, or create a manual backup before running optimizations'
 
 Write-Host ""
 Write-Host "=== Compatibility Check ===" -ForegroundColor Cyan

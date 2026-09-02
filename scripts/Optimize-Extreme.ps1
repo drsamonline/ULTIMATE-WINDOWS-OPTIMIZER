@@ -43,8 +43,12 @@ if ($totalRamGB -ge 16) {
 
 try {
     $sysDriveLetter = $env:SystemDrive.TrimEnd(':')
+    # Use the supported cmdlet chain: Get-Partition | Get-Disk | Get-PhysicalDisk.
+    # The previous approach compared $_.DeviceId (a string) with $partition.DiskNumber
+    # (an integer), which silently failed on storage stacks that return non-numeric DeviceIds.
     $partition = Get-Partition -DriveLetter $sysDriveLetter -ErrorAction Stop
-    $physicalDisk = Get-PhysicalDisk -ErrorAction Stop | Where-Object { $_.DeviceId -eq $partition.DiskNumber }
+    $disk = $partition | Get-Disk -ErrorAction Stop
+    $physicalDisk = $disk | Get-PhysicalDisk -ErrorAction Stop
     $isSSD = $physicalDisk.MediaType -eq 'SSD'
 } catch { $isSSD = $false }
 

@@ -41,6 +41,14 @@ try {
 Start-Sleep -Seconds 1
 $after = Get-FreeSpaceGB
 $freedGB = [math]::Round($after - $before, 2)
+# A background service may have written a large file between the two measurements,
+# producing a negative "freed" value. Clamp to 0 with a clear note in that case.
+$clamped = $false
+if ($freedGB -lt 0) {
+    Write-Log -Message "Measured freed space was negative ($freedGB GB) - likely a large temp write happened during cleanup. Reporting 0 GB freed." -LogFile $logFile -Level WARN
+    $freedGB = 0
+    $clamped = $true
+}
 
 Write-Log -Message "Free space after cleanup: $([math]::Round($after,2)) GB" -LogFile $logFile -Level INFO
 Write-Log -Message "Space freed: $freedGB GB (measured, not estimated)" -LogFile $logFile -Level OK

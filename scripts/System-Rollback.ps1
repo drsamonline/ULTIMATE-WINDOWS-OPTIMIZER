@@ -25,7 +25,14 @@ if (-not $Create -and -not $ListAndLaunch) {
     Write-Host "  [1] Create a restore point now"
     Write-Host "  [2] List existing restore points and open System Restore"
     $choice = Read-Host "Enter 1 or 2"
-    if ($choice -eq '1') { $Create = $true } else { $ListAndLaunch = $true }
+    if ($choice -eq '1') {
+        $Create = $true
+    } elseif ($choice -eq '2') {
+        $ListAndLaunch = $true
+    } else {
+        Write-Host "Invalid choice '$choice' - aborted, no changes were made." -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 if ($Create) {
