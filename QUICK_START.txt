@@ -1,4 +1,4 @@
-ULTIMATE WINDOWS OPTIMIZER v6.0 - QUICK START
+ULTIMATE WINDOWS OPTIMIZER v6.0.1 - QUICK START
 ================================================
 
 1. Extract the ZIP anywhere on your PC.
@@ -30,6 +30,7 @@ ULTIMATE WINDOWS OPTIMIZER v6.0 - QUICK START
 
 Logs are saved to:  %USERPROFILE%\OptimizationLogs
 Backups are saved to: %USERPROFILE%\OptimizationLogs\Backups
+Snapshots are saved to: %USERPROFILE%\OptimizationLogs\Snapshots
 
 No profile promises a specific percentage improvement - actual results
 depend on your hardware and workload. Use the snapshot/compare tools to

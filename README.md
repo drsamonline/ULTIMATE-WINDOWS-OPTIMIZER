@@ -1,15 +1,17 @@
-# Ultimate Windows Optimizer v6.0
+# Ultimate Windows Optimizer v6.0.1
 
 A PowerShell + batch toolkit for applying documented, reversible Windows
 performance tweaks, organized into profiles for different use cases.
 
-> **v6.0 is a full rewrite of the earlier v5.1 release.** In v5.1, all 8
-> "profiles" secretly ran the same four registry tweaks under different
-> labels, and several utility scripts printed hard-coded success messages
-> instead of doing real work. v6.0 fixes both problems: every profile below
-> applies a genuinely different, explicit set of tweaks, and every utility
-> script measures or checks the real system state. See `CHANGELOG.md` for
-> the full list of changes.
+> **v6.0.1 is a bug-fix release over v6.0.** v6.0 was a full rewrite of v5.1; see
+> `CHANGELOG.md` for the full v6.0 changelog. v6.0.1 fixes several correctness
+> bugs discovered after the v6.0 release: empty backup files (which broke the
+> undo pipeline), power-plan GUID capture happening *after* the plan was
+> switched (so undo would restore the wrong plan), `Invoke-Tweak` swallowing
+> inner failures (so profile runs always reported 100% success), fragile SSD
+> detection on certain storage stacks, batch launcher files using LF instead of
+> CRLF line endings, and several smaller issues. See `CHANGELOG.md` for the full
+> list of v6.0.1 fixes.
 
 ## What this is (and isn't)
 
@@ -61,7 +63,13 @@ measure your own real before/after numbers with `Compare-Results.ps1`.
 
 Full tweak definitions live in `scripts/Common-Functions.ps1` under
 `Invoke-Tweak` and `$Global:ProfileDefinitions` - read them before running
-anything you don't understand.
+anything you don't understand. For the `Extreme` and `Godlike` profiles,
+`DisablePagingExecutive` and `DisableSysMain` are listed in
+`$Global:ProfileDefinitions` so that `Verify-System.ps1` can verify them, but
+the profile scripts also append them at runtime gated on RAM >= 16GB and SSD
+detection respectively - so if your hardware doesn't meet the gate, those
+tweaks will be skipped during the run (and `Verify-System.ps1` will then
+correctly report them as "Not Applied").
 
 ## Utilities
 
@@ -77,8 +85,8 @@ anything you don't understand.
 
 ## Safety notes
 
-- Every registry/service change is backed up **before** it's applied. Nothing is a one-way door.
-- `Undo-All-Changes.ps1` supports `-WhatIf` to preview what it would restore without changing anything.
+- Every registry/service change is backed up **before** it's applied. Registry values, Windows services, hibernation state, and the active power plan are all captured into per-run JSON backup files, and `Undo-All-Changes.ps1` reads them to restore the previous state. (Services originally in `Boot`/`System` start modes - kernel drivers - cannot be restored via `Set-Service` and are logged with a clear warning instead.)
+- `Undo-All-Changes.ps1` supports `-WhatIf` to preview what it would restore without changing anything, and tolerates corrupted/empty backup files without aborting the whole undo run.
 - The `Godlike` profile requires typed confirmation because it disables Windows Search indexing, which has a real usability cost.
 - The optional dependency downloader (menu `D`) only opens official vendor download pages - it does not silently run anything, and does not claim to verify file signatures for you.
 
