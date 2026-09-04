@@ -16,7 +16,7 @@ param(
     [switch]$ListAndLaunch
 )
 
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 Assert-Admin
 $logFile = New-LogFile -Name 'SystemRollback'
 

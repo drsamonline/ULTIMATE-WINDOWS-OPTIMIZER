@@ -3,7 +3,7 @@
     Actually inspects the machine and reports PASS/WARN/FAIL per item,
     instead of printing a hard-coded "all checks passed" message.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 $logFile = New-LogFile -Name 'CompatibilityCheck'
 $results = @()
@@ -43,14 +43,14 @@ Test-Item -Name 'System Restore availability' -Check {
         # If the WMI query itself fails, fall back to the cmdlet availability check
         # (still a useful signal even if weaker).
         $cfg = Get-CimInstance -Namespace root/default -ClassName SystemRestoreConfig -ErrorAction SilentlyContinue
-        if ($cfg -and $cfg.RPSessionInterval -ne $null -and $cfg.RPSessionInterval -gt 0) { return $true }
+        if ($cfg -and $null -ne $cfg.RPSessionInterval -and $cfg.RPSessionInterval -gt 0) { return $true }
         # Fallback: try to actually enumerate restore points for the system drive.
         try {
-            $points = Get-ComputerRestorePoint -ErrorAction Stop
+            Get-ComputerRestorePoint -ErrorAction Stop | Out-Null
             return $true
         } catch {
             # As a last resort, see if the cmdlet exists (weaker signal).
-            return ((Get-Command -Name Checkpoint-Computer -ErrorAction SilentlyContinue) -ne $null)
+            return ($null -ne (Get-Command -Name Checkpoint-Computer -ErrorAction SilentlyContinue))
         }
     } -PassDesc 'System Restore enabled on system drive' -FailDesc 'System Restore is disabled or unavailable on this drive - enable it in System Properties > System Protection, or create a manual backup before running optimizations'
 

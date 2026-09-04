@@ -1,9 +1,18 @@
-# Ultimate Windows Optimizer v6.0.1
+# Ultimate Windows Optimizer v6.1.0
 
 A PowerShell + batch toolkit for applying documented, reversible Windows
 performance tweaks, organized into profiles for different use cases.
 
-> **v6.0.1 is a bug-fix release over v6.0.** v6.0 was a full rewrite of v5.1; see
+> **v6.1.0 hardens the undo path and packages the shared engine as a module.**
+> Re-running a profile no longer overwrites the recorded "original" value,
+> registry keys the toolkit creates are removed again on undo, backup files
+> are only written after a change actually succeeds, `DisableStartMenuSuggestions`
+> is now verified on both values it writes, and old backup files can be pruned
+> from the launcher (menu `P`). The shared engine moved from
+> `scripts/Common-Functions.ps1` to the `scripts/UWO.psm1` module (the old file
+> remains as a compatibility shim). See `CHANGELOG.md` for the full list.
+
+> **v6.0.1 was a bug-fix release over v6.0.** v6.0 was a full rewrite of v5.1; see
 > `CHANGELOG.md` for the full v6.0 changelog. v6.0.1 fixes several correctness
 > bugs discovered after the v6.0 release: empty backup files (which broke the
 > undo pipeline), power-plan GUID capture happening *after* the plan was
@@ -61,15 +70,19 @@ measure your own real before/after numbers with `Compare-Results.ps1`.
 | **Server** | Disables Search indexing and Xbox services, removes hibernation, favors background-service CPU priority over foreground apps (opposite of Gaming) | No GPU/gaming tweaks |
 | **Streaming** | Gaming-profile tweaks + `SystemResponsiveness` lowered so capture/encoding software isn't CPU-starved by the foreground game | - |
 
-Full tweak definitions live in `scripts/Common-Functions.ps1` under
-`Invoke-Tweak` and `$Global:ProfileDefinitions` - read them before running
-anything you don't understand. For the `Extreme` and `Godlike` profiles,
-`DisablePagingExecutive` and `DisableSysMain` are listed in
-`$Global:ProfileDefinitions` so that `Verify-System.ps1` can verify them, but
-the profile scripts also append them at runtime gated on RAM >= 16GB and SSD
-detection respectively - so if your hardware doesn't meet the gate, those
-tweaks will be skipped during the run (and `Verify-System.ps1` will then
-correctly report them as "Not Applied").
+Full tweak definitions live in `scripts/UWO.psm1` under `Invoke-Tweak` and the
+profile catalog, which is the **single source of truth** for what each profile
+does: the profile scripts read their tweak list from it via `Get-ProfileTweak`
+instead of keeping their own copy, so the table above, `Verify-System.ps1`, and
+what actually runs can no longer drift apart. Read them before running anything
+you don't understand.
+
+For the `Extreme` and `Godlike` profiles, `DisablePagingExecutive` and
+`DisableSysMain` are listed in the catalog so that `Verify-System.ps1` can
+verify them, but the profile scripts strip them from the list they run and
+re-append them at runtime, gated on RAM >= 16GB and SSD detection respectively -
+so if your hardware doesn't meet the gate, those tweaks are skipped during the
+run (and `Verify-System.ps1` will then correctly report them as "Not Applied").
 
 ## Utilities
 
@@ -82,13 +95,40 @@ correctly report them as "Not Applied").
 - **Verify-System.ps1** - checks current registry/service state against what a chosen profile should have applied
 - **System-Rollback.ps1** - creates a real Windows System Restore point, or opens System Restore
 - **Undo-All-Changes.ps1** - reads every backup file this toolkit has written and restores every tracked registry value, service, and hibernation setting to its original state
+- **Cleanup-Backups.ps1** (menu `P`) - prunes old backup JSON files that would otherwise accumulate forever. Conservative by design: a file is deleted only if it is **both** outside the newest 20 files **and** older than 30 days, and backups that have not been undone yet are never touched unless you pass `-IncludePending`. Use `-WhatIf` to preview, `-KeepCount`/`-MaxAgeDays` to change the thresholds; everything pruned is logged
 
 ## Safety notes
 
-- Every registry/service change is backed up **before** it's applied. Registry values, Windows services, hibernation state, and the active power plan are all captured into per-run JSON backup files, and `Undo-All-Changes.ps1` reads them to restore the previous state. (Services originally in `Boot`/`System` start modes - kernel drivers - cannot be restored via `Set-Service` and are logged with a clear warning instead.)
+- The previous state of every registry value, Windows service, hibernation setting, and power plan is captured **before** the change and written to a per-run JSON backup file **as soon as the change actually succeeds**. A failed change writes no backup record, so `Undo-All-Changes.ps1` can never try to "restore" something that was never applied. (Services originally in `Boot`/`System` start modes - kernel drivers - cannot be restored via `Set-Service` and are logged with a clear warning instead.)
+- **Re-running a profile is a no-op for values that already match.** Nothing is written and no backup record is added, so a second run cannot record an already-tweaked value as your "original" one. As a second line of defence, undo de-duplicates registry records across all backup files by `Path\Name` and always restores the *earliest* recorded original.
+- **Registry keys created by the toolkit are removed again on undo** - but only when the value did not exist beforehand, the key was created by this toolkit, and the key is still empty. A key that something else has since written to is left in place.
 - `Undo-All-Changes.ps1` supports `-WhatIf` to preview what it would restore without changing anything, and tolerates corrupted/empty backup files without aborting the whole undo run.
+- Power plans are restored locale-independently: the plan GUID is extracted and stored when it is captured, rather than re-parsed from localized `powercfg` output at undo time.
+- Backup files are never deleted automatically. Pruning only happens when you run `Cleanup-Backups.ps1` (menu `P`), and by default it leaves every backup that has not been undone yet alone.
 - The `Godlike` profile requires typed confirmation because it disables Windows Search indexing, which has a real usability cost.
 - The optional dependency downloader (menu `D`) only opens official vendor download pages - it does not silently run anything, and does not claim to verify file signatures for you.
+
+## Development
+
+The shared engine is the `UWO` module (`scripts/UWO.psm1` + `scripts/UWO.psd1`).
+Scripts consume it with `Import-Module (Join-Path $PSScriptRoot 'UWO.psd1')`;
+`scripts/Common-Functions.ps1` remains only as a shim that imports the module
+and re-publishes the old `$Global:*` catalog variables, so anything that still
+dot-sources it keeps working.
+
+Tests live in `tests/` and run with Pester 5:
+
+```powershell
+Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser
+Invoke-Pester -Path ./tests
+```
+
+The registry tests only ever touch `HKCU:\Software\UWO-Test` and are skipped on
+non-Windows hosts; logs/backups are redirected to a temporary directory via the
+`UWO_LOG_ROOT` environment variable, so running the suite never touches
+`%USERPROFILE%\OptimizationLogs`. Lint with
+`Invoke-ScriptAnalyzer -Path . -Recurse -Settings ./PSScriptAnalyzerSettings.psd1`;
+both are meant to run on `windows-latest` under Windows PowerShell 5.1 in CI.
 
 ## License
 

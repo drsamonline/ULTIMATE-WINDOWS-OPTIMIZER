@@ -1,5 +1,88 @@
 # Changelog
 
+## v6.1.0 - Undo correctness, idempotency, module packaging
+
+Behaviour-affecting release. The theme is making the reversibility guarantee
+hold on the second run, not just the first, and making the shared engine
+testable.
+
+- **Registry backup records are written only after the change succeeds.**
+  `Set-RegistryValueSafe` called `Add-BackupRecord` *before* `New-ItemProperty`,
+  so a failed write left a phantom record that `Undo-All-Changes.ps1` would
+  later try to "restore" (or, for a value that never existed, delete). The
+  record is now written after the value has actually been set - the same
+  ordering the v6.0.1 `powercfg`/`Invoke-NativeCommand` fix introduced for
+  native commands.
+- **Registry keys created by the toolkit are removed again on undo.** Backup
+  records now carry a `KeyCreated` field recording whether the target key had
+  to be created. `Restore-RegistryBackupRecord` removes the value as before and
+  then removes the key too - but only when the toolkit created it and it is
+  still empty (no remaining values, no subkeys), so a key something else has
+  since written to is left alone. The removal is logged. Backup files written
+  by older versions simply have no `KeyCreated` field and keep the old
+  behaviour.
+- **Re-running a profile no longer corrupts the original-value baseline.**
+  Previously, a second run recorded the already-tweaked value as
+  `OriginalValue`, so undo restored the tweak instead of your setting. Two
+  changes fix this:
+  - `Set-RegistryValueSafe` now compares the current value with the value it is
+    about to write and, if they already match, skips both the write and the
+    backup record (logged as already-applied).
+  - `Undo-All-Changes.ps1` de-duplicates registry records across all backup
+    files by `Path\Name` (files are read oldest-first) and restores the
+    *earliest* recorded original, so a later run's stale record can never
+    override the true pre-toolkit value.
+- **`DisableStartMenuSuggestions` is now fully verified.** The tweak writes two
+  values but verification only checked `SubscribedContent-338388Enabled`. A new
+  multi-value registry map (analogous to the existing multi-service map) lists
+  both `SubscribedContent-338388Enabled` and `SystemPaneSuggestionsEnabled`, and
+  `Verify-System.ps1` reports `Applied` only when *both* are `0`, naming the
+  missing or mismatched value otherwise. The single-value entry was removed.
+- **Backup-file retention (new menu option `P`).** Backup JSON files used to
+  accumulate indefinitely. `Cleanup-Backups.ps1` prunes them conservatively: a
+  file is deleted only if it is **both** outside the newest `-KeepCount`
+  (default 20) files **and** older than `-MaxAgeDays` (default 30). Backups that
+  have not been undone yet are never pruned unless `-IncludePending` is passed,
+  since they are the only record of changes still applied to the machine.
+  `-WhatIf` previews; every prune and retention decision is logged.
+- **Power plans restore independently of system locale.** The plan GUID is now
+  extracted from `powercfg /getactivescheme` at capture time and stored as a
+  clean `OriginalGuid` (with the raw output kept as `OriginalSchemeRaw` for
+  diagnostics), instead of being regex-parsed out of localized output at undo
+  time. Older backup records that only contain the raw string are still parsed
+  as a fallback.
+- **Hardened the CIM filter in `Set-ServiceStateSafe`.** The original start mode
+  is now read from the `ServiceController` object already returned by
+  `Get-Service`; the CIM query is only a fallback and escapes the service name
+  before interpolating it into the WQL filter. `Verify-System.ps1` escapes its
+  service-name filters the same way.
+- **The shared engine is now a module.** `scripts/Common-Functions.ps1` became
+  `scripts/UWO.psm1` with a `scripts/UWO.psd1` manifest, module-scoped state in
+  place of `$Global:` variables, accessor functions
+  (`Get-ProfileDefinition`, `Get-ProfileTweak`, `Get-Tweak*Map`,
+  `Get-Uwo*Directory`) and an explicit `Export-ModuleMember` surface. Every
+  script now uses `Import-Module` instead of dot-sourcing.
+  `scripts/Common-Functions.ps1` remains as a thin shim that imports the module
+  and re-publishes the old `$Global:*` names, so external scripts that
+  dot-source it keep working. `$env:UWO_LOG_ROOT` can redirect the
+  logs/backups/snapshots tree (used by the tests).
+- **Profile definitions are the single source of truth for tweak lists.** Each
+  `Optimize-*.ps1` hard-coded a `$tweaks` array duplicating the catalog entry;
+  they now call `Get-ProfileTweak`, so the two cannot drift. `Optimize-Extreme`
+  and `Optimize-Godlike` strip the hardware-gated `DisablePagingExecutive` /
+  `DisableSysMain` from the catalog list and re-append them at runtime behind
+  the existing RAM >= 16GB and SSD checks, exactly as before.
+- **Tests and CI.** New `tests/` Pester suite covering backup-after-success,
+  `KeyCreated` tracking and created-key removal, the idempotent skip, valid
+  empty-array backup files, value restore, the oldest-wins de-duplication,
+  power-plan GUID extraction, WQL escaping, and retention. Registry tests only
+  touch `HKCU:\Software\UWO-Test` and are skipped on non-Windows hosts. The
+  suite is intended to run under Windows PowerShell 5.1 on `windows-latest`
+  together with `PSScriptAnalyzer` (settings in `PSScriptAnalyzerSettings.psd1`).
+- **Smaller fixes.** `Cleanup-System.ps1` now tells the user when a negative
+  measured delta was clamped to 0 GB, and `Compatibility-Check.ps1` no longer
+  assigns an unused restore-point variable.
+
 ## v6.0.1 - Bug-fix release
 
 This release fixes several correctness bugs in v6.0 that were found by an

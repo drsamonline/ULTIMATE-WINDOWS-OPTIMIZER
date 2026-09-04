@@ -40,6 +40,7 @@ echo   [M]  Performance Snapshot      [R] Compare Two Snapshots
 echo   [A]  Advanced Modules (8 real toggles)
 echo   [S]  Create System Restore Point / Open System Restore
 echo   [U]  UNDO ALL TRACKED CHANGES
+echo   [P]  Prune Old Backup Files (keeps last 20 / 30 days)
 echo   [D]  Download Optional Diagnostic Tools (HWiNFO64, GPU-Z)
 echo.
 echo   [Q] Quit
@@ -114,6 +115,10 @@ if /i "%choice%"=="S" (
 )
 if /i "%choice%"=="U" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "Undo-All-Changes.ps1"
+    goto PAUSE_MENU
+)
+if /i "%choice%"=="P" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "Cleanup-Backups.ps1"
     goto PAUSE_MENU
 )
 if /i "%choice%"=="D" (

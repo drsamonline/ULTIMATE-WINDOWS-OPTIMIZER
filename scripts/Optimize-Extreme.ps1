@@ -13,20 +13,16 @@
 
     This is a desktop-only profile. Do not use on laptops (see Optimize-Laptop.ps1).
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 Assert-Admin
 
-$tweaks = @(
-    'DisableTelemetry'
-    'EnableHAGS'
-    'GamingPriorityBoost'
-    'DisableNetworkThrottling'
-    'DisableGameDVR'
-    'PowerPlanHighPerformance'
-    'VisualEffectsBestPerformance'
-    'DisableHibernation'
-)
+# The tweak list comes from the module's profile catalog. The two
+# hardware-gated tweaks are stripped out here and re-added below only when
+# the RAM/SSD checks pass (they stay in the catalog so Verify-System.ps1 can
+# still verify them).
+$hardwareGated = @('DisablePagingExecutive','DisableSysMain')
+$tweaks = @(Get-ProfileTweak -ProfileName 'Extreme' | Where-Object { $hardwareGated -notcontains $_ })
 $guards = @('This profile removes hibernation (frees disk space equal to installed RAM, but disables Fast Startup and Sleep-to-hibernate).')
 
 # --- Hardware-gated tweaks -------------------------------------------------

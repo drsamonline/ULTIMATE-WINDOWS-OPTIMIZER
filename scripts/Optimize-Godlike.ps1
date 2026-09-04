@@ -10,7 +10,7 @@
     Desktop enthusiast machines only. Do not use on laptops or on any
     machine where fast file search matters to you.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 Assert-Admin
 
@@ -28,18 +28,12 @@ if ($confirmation -ne 'CONFIRM') {
     exit 0
 }
 
-$tweaks = @(
-    'DisableTelemetry'
-    'EnableHAGS'
-    'GamingPriorityBoost'
-    'DisableNetworkThrottling'
-    'DisableGameDVR'
-    'PowerPlanHighPerformance'
-    'VisualEffectsBestPerformance'
-    'DisableHibernation'
-    'DisableSearchIndexingService'
-    'DisableXboxServices'
-)
+# The tweak list comes from the module's profile catalog. The two
+# hardware-gated tweaks are stripped out here and re-added below only when
+# the RAM/SSD checks pass (they stay in the catalog so Verify-System.ps1 can
+# still verify them).
+$hardwareGated = @('DisablePagingExecutive','DisableSysMain')
+$tweaks = @(Get-ProfileTweak -ProfileName 'Godlike' | Where-Object { $hardwareGated -notcontains $_ })
 $guards = @('Windows Search indexing disabled: file/Start-menu search will be noticeably slower.')
 
 try {

@@ -4,10 +4,10 @@
     two snapshots exist, it tells you to run Performance-Monitor.ps1 first -
     it does not fabricate numbers.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-$snapshotFiles = Get-ChildItem -Path $Script:SnapshotDir -Filter '*.json' -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime
+$snapshotFiles = @(Get-ChildItem -Path (Get-UwoSnapshotDirectory) -Filter '*.json' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime)
 
 if ($snapshotFiles.Count -lt 2) {
     Write-Host "Only $($snapshotFiles.Count) snapshot(s) found." -ForegroundColor Yellow

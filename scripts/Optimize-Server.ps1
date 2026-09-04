@@ -6,17 +6,9 @@
     background service throughput over foreground desktop responsiveness -
     the opposite of the Gaming profile's priority boost.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-$tweaks = @(
-    'DisableTelemetry'
-    'DisableSearchIndexingService'
-    'DisableXboxServices'
-    'DisableHibernation'
-    'PowerPlanHighPerformance'
-    'VisualEffectsBestPerformance'
-    'ServerPrioritySeparation'
-)
+$tweaks = Get-ProfileTweak -ProfileName 'Server'
 
 Invoke-OptimizationProfile -ProfileName 'Server' -Tweaks $tweaks `
     -Guards @('Assumes a headless/background-service machine: Windows Search indexing is disabled and CPU priority favors background services over foreground apps.')

@@ -12,28 +12,35 @@ param(
     [string]$ProfileName
 )
 
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-if (-not $ProfileName -or -not $Global:ProfileDefinitions.ContainsKey($ProfileName)) {
-    Write-Host "Available profiles: $($Global:ProfileDefinitions.Keys -join ', ')" -ForegroundColor Cyan
+$profileDefinitions   = Get-ProfileDefinition
+$verificationMap      = Get-TweakVerificationMap
+$multiRegistryMap     = Get-TweakMultiRegistryMap
+$serviceMap           = Get-TweakServiceMap
+$multiServiceMap      = Get-TweakMultiServiceMap
+$powerPlanMap         = Get-TweakPowerPlanMap
+
+if (-not $ProfileName -or -not $profileDefinitions.ContainsKey($ProfileName)) {
+    Write-Host "Available profiles: $((Get-ProfileName) -join ', ')" -ForegroundColor Cyan
     $ProfileName = Read-Host "Enter the profile name to verify"
 }
 
-if (-not $Global:ProfileDefinitions.ContainsKey($ProfileName)) {
+if (-not $profileDefinitions.ContainsKey($ProfileName)) {
     Write-Host "Unknown profile '$ProfileName'." -ForegroundColor Red
     exit 1
 }
 
 $logFile = New-LogFile -Name "Verify_$ProfileName"
-$tweaks = $Global:ProfileDefinitions[$ProfileName]
+$tweaks = Get-ProfileTweak -ProfileName $ProfileName
 
 Write-Host ""
 Write-Host "=== Verifying profile: $ProfileName ===" -ForegroundColor Cyan
 
 $results = @()
 foreach ($tweak in $tweaks) {
-    if ($Global:TweakVerificationMap.ContainsKey($tweak)) {
-        $spec = $Global:TweakVerificationMap[$tweak]
+    if ($verificationMap.ContainsKey($tweak)) {
+        $spec = $verificationMap[$tweak]
         try {
             $current = (Get-ItemProperty -Path $spec.Path -Name $spec.Name -ErrorAction Stop).$($spec.Name)
             $status = if ($current -eq $spec.ExpectedValue) { 'Applied' } else { "Not Applied (current: $current, expected: $($spec.ExpectedValue))" }
@@ -42,25 +49,43 @@ foreach ($tweak in $tweaks) {
         }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }
-    elseif ($Global:TweakServiceMap.ContainsKey($tweak)) {
-        $spec = $Global:TweakServiceMap[$tweak]
+    elseif ($multiRegistryMap.ContainsKey($tweak)) {
+        # Multi-value registry tweak (e.g. DisableStartMenuSuggestions): every
+        # listed value must match for the tweak to count as 'Applied'.
+        $spec = $multiRegistryMap[$tweak]
+        $problems = @()
+        foreach ($valueSpec in $spec.Values) {
+            try {
+                $current = (Get-ItemProperty -Path $valueSpec.Path -Name $valueSpec.Name -ErrorAction Stop).$($valueSpec.Name)
+                if ($current -ne $valueSpec.ExpectedValue) {
+                    $problems += "$($valueSpec.Name)=$current (expected $($valueSpec.ExpectedValue))"
+                }
+            } catch {
+                $problems += "$($valueSpec.Name)=<not found>"
+            }
+        }
+        $status = if ($problems.Count -eq 0) { 'Applied' } else { "Not Applied ($($problems -join '; '))" }
+        $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
+    }
+    elseif ($serviceMap.ContainsKey($tweak)) {
+        $spec = $serviceMap[$tweak]
         try {
-            $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='$($spec.ServiceName)'" -ErrorAction Stop
+            $svc = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f (ConvertTo-CimFilterLiteral -Value $spec.ServiceName)) -ErrorAction Stop
             $status = if ($svc.StartMode -eq $spec.ExpectedStartMode) { 'Applied' } else { "Not Applied (current: $($svc.StartMode), expected: $($spec.ExpectedStartMode))" }
         } catch {
             $status = 'Unknown (service not found)'
         }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }
-    elseif ($Global:TweakMultiServiceMap.ContainsKey($tweak)) {
+    elseif ($multiServiceMap.ContainsKey($tweak)) {
         # Multi-service tweak (e.g. DisableXboxServices): all listed services must
         # match the expected start mode for the tweak to count as 'Applied'.
-        $spec = $Global:TweakMultiServiceMap[$tweak]
+        $spec = $multiServiceMap[$tweak]
         $notMatching = @()
         $notFound = @()
         foreach ($svcName in $spec.ServiceNames) {
             try {
-                $svc = Get-CimInstance -ClassName Win32_Service -Filter "Name='$svcName'" -ErrorAction Stop
+                $svc = Get-CimInstance -ClassName Win32_Service -Filter ("Name='{0}'" -f (ConvertTo-CimFilterLiteral -Value $svcName)) -ErrorAction Stop
                 if ($svc.StartMode -ne $spec.ExpectedStartMode) {
                     $notMatching += "$svcName=$($svc.StartMode)"
                 }
@@ -77,10 +102,10 @@ foreach ($tweak in $tweaks) {
         }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }
-    elseif ($Global:TweakPowerPlanMap.ContainsKey($tweak)) {
+    elseif ($powerPlanMap.ContainsKey($tweak)) {
         # Power-plan tweak: parse the active scheme GUID and compare against
         # the well-known alias GUIDs (SCHEME_MIN = High Performance, SCHEME_BALANCED = Balanced).
-        $expectedAlias = $Global:TweakPowerPlanMap[$tweak]
+        $expectedAlias = $powerPlanMap[$tweak]
         try {
             $active = (powercfg.exe /getactivescheme) -join ''
             $isActive = $false

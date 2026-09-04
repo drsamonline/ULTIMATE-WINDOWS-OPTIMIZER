@@ -3,7 +3,7 @@
     Runs 8 real, independent, backed-up tweaks and reports an ACTUAL count
     of how many succeeded/failed - not a hard-coded "8 modules executed".
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 Assert-Admin
 $logFile = New-LogFile -Name 'AdvancedModules'
