@@ -3,7 +3,7 @@
     Reports real hardware info via CIM (not the deprecated WMI cmdlets, and
     not hard-coded placeholder text).
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 $logFile = New-LogFile -Name 'HardwareDetection'
 

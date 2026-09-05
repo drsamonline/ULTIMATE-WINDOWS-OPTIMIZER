@@ -6,17 +6,9 @@
     tasks (encoding/capture) are not starved of CPU time by the foreground
     game - a real, documented tweak used by streaming-focused guides.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-$tweaks = @(
-    'DisableTelemetry'
-    'EnableHAGS'
-    'GamingPriorityBoost'
-    'DisableNetworkThrottling'
-    'LowerSystemResponsivenessForMultimedia'
-    'PowerPlanHighPerformance'
-    'VisualEffectsBestPerformance'
-)
+$tweaks = Get-ProfileTweak -ProfileName 'Streaming'
 
 Invoke-OptimizationProfile -ProfileName 'Streaming' -Tweaks $tweaks `
     -Guards @('SystemResponsiveness lowered so capture/encoding software is not starved of CPU by the foreground game.')

@@ -15,17 +15,9 @@
     Instead it focuses on: USB selective suspend (saves power on idle USB
     devices), a Balanced power plan, and trimming background overhead.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-$tweaks = @(
-    'DisableTelemetry'
-    'DisableStartMenuSuggestions'
-    'DisableBackgroundApps'
-    'DisableHAGS'
-    'EnableUSBSelectiveSuspend'
-    'VisualEffectsBalanced'
-    'PowerPlanBalanced'
-)
+$tweaks = Get-ProfileTweak -ProfileName 'Laptop'
 
 Invoke-OptimizationProfile -ProfileName 'Laptop' -Tweaks $tweaks `
     -Guards @('Hibernation and memory paging settings are intentionally left untouched to preserve battery safety and RAM headroom.')

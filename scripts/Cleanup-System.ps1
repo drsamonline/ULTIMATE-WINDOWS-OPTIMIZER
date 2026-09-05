@@ -3,7 +3,7 @@
     Cleans user/Windows temp folders and the Recycle Bin, and reports the
     ACTUAL disk space freed (measured before/after), not a canned "5-15GB" claim.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 Assert-Admin
 $logFile = New-LogFile -Name 'Cleanup'
@@ -58,4 +58,7 @@ Write-Host "=== Cleanup Complete ===" -ForegroundColor Green
 Write-Host "Free space before: $([math]::Round($before,2)) GB"
 Write-Host "Free space after:  $([math]::Round($after,2)) GB"
 Write-Host "Space freed:       $freedGB GB" -ForegroundColor Cyan
+if ($clamped) {
+    Write-Host "(Measured free space went down during cleanup - something else wrote to the disk, so this is reported as 0 GB.)" -ForegroundColor Yellow
+}
 Write-Host "(Actual results depend entirely on how much temp/cache data existed on this machine.)" -ForegroundColor DarkGray

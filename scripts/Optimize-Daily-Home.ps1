@@ -5,15 +5,8 @@
     over raw throughput. Does NOT touch GPU scheduling, priority separation,
     or memory paging - those are reserved for the Gaming/Extreme/Godlike profiles.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-$tweaks = @(
-    'DisableTelemetry'
-    'DisableStartupDelay'
-    'DisableStartMenuSuggestions'
-    'DisableBackgroundApps'
-    'VisualEffectsBalanced'
-    'PowerPlanBalanced'
-)
+$tweaks = Get-ProfileTweak -ProfileName 'Daily-Home'
 
 Invoke-OptimizationProfile -ProfileName 'Daily-Home' -Tweaks $tweaks

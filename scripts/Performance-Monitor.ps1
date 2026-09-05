@@ -14,7 +14,7 @@ param(
     [string]$Label
 )
 
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 if (-not $Label) {
     $Label = Read-Host "Enter a label for this snapshot (e.g. Baseline, AfterGaming)"

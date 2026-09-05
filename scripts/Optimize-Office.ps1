@@ -7,16 +7,8 @@
     CPU priority separation - those provide no benefit for office workloads
     and are reserved for the Gaming/Extreme/Godlike/Streaming profiles.
 #>
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
-$tweaks = @(
-    'DisableTelemetry'
-    'DisableStartMenuSuggestions'
-    'DisableBackgroundApps'
-    'DisableXboxServices'
-    'VisualEffectsBalanced'
-    'PowerPlanBalanced'
-    'BalancedPrioritySeparation'
-)
+$tweaks = Get-ProfileTweak -ProfileName 'Office'
 
 Invoke-OptimizationProfile -ProfileName 'Office' -Tweaks $tweaks

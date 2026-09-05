@@ -8,21 +8,27 @@
     By default it processes ALL backup files it finds (oldest first) and
     then archives them so re-running doesn't reapply the same restores
     endlessly. Use -WhatIf to preview without changing anything.
+
+    Registry records are de-duplicated across all backup files by Path\Name,
+    keeping the OLDEST record for each value: a later run that recorded an
+    already-tweaked value as "original" must never override the true
+    pre-toolkit baseline.
 #>
 param(
     [switch]$WhatIf
 )
 
-. (Join-Path $PSScriptRoot 'Common-Functions.ps1')
+Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 Assert-Admin
 $logFile = New-LogFile -Name 'UndoAllChanges'
 
-$backupFiles = Get-ChildItem -Path $Script:BackupDir -Filter '*.json' -ErrorAction SilentlyContinue |
-    Sort-Object LastWriteTime
+$backupDir = Get-UwoBackupDirectory
+$backupFiles = @(Get-ChildItem -Path $backupDir -Filter '*.json' -File -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime)
 
 if ($backupFiles.Count -eq 0) {
-    Write-Host "No backup files found in $Script:BackupDir - nothing to undo." -ForegroundColor Yellow
+    Write-Host "No backup files found in $backupDir - nothing to undo." -ForegroundColor Yellow
     exit 0
 }
 
@@ -37,86 +43,99 @@ if (-not $WhatIf) {
     }
 }
 
-$archiveDir = Join-Path $Script:BackupDir 'restored'
+$archiveDir = Get-UwoBackupArchiveDirectory
 if (-not (Test-Path $archiveDir)) { New-Item -Path $archiveDir -ItemType Directory -Force | Out-Null }
 
 $restoredCount = 0
 $failedCount = 0
 
+# --- Pass 1: parse every backup file (oldest first) ------------------------
+$allRecords = @()
+$parsedFiles = @()
 foreach ($file in $backupFiles) {
-    Write-Log -Message "Processing backup file: $($file.Name)" -LogFile $logFile -Level INFO
+    Write-Log -Message "Reading backup file: $($file.Name)" -LogFile $logFile -Level INFO
     try {
         $raw = Get-Content -Path $file.FullName -Raw
         if ([string]::IsNullOrWhiteSpace($raw)) {
             Write-Log -Message "Backup file '$($file.Name)' is empty - skipped" -LogFile $logFile -Level WARN
-            if (-not $WhatIf) {
-                Move-Item -Path $file.FullName -Destination (Join-Path $archiveDir $file.Name) -Force
-            }
+            $parsedFiles += $file
             continue
         }
         $records = @(ConvertFrom-Json -InputObject $raw)
         # Filter out any spurious $null entries that could exist in older
         # backup files written before the Add-BackupRecord null-coercion fix.
-        $records = @($records | Where-Object { $null -ne $_ })
+        $allRecords += @($records | Where-Object { $null -ne $_ })
+        $parsedFiles += $file
     } catch {
         Write-Log -Message "Backup file '$($file.Name)' could not be parsed: $($_.Exception.Message) - skipped" -LogFile $logFile -Level ERROR
         $failedCount++
-        if (-not $WhatIf) {
-            Move-Item -Path $file.FullName -Destination (Join-Path $archiveDir $file.Name) -Force
-        }
+        $parsedFiles += $file
+    }
+}
+
+# --- Pass 2: keep the earliest record per registry value -------------------
+$recordsToRestore = @(Select-BackupRecordsToRestore -Records $allRecords)
+$skipped = $allRecords.Count - $recordsToRestore.Count
+if ($skipped -gt 0) {
+    Write-Log -Message "Ignoring $skipped duplicate registry record(s) from later runs - the oldest recorded original value wins." -LogFile $logFile -Level INFO
+}
+
+# --- Pass 3: restore -------------------------------------------------------
+foreach ($record in $recordsToRestore) {
+    if ($WhatIf) {
+        $target = @(
+            (Get-RecordProperty -Record $record -Name 'Path')
+            (Get-RecordProperty -Record $record -Name 'Name')
+            (Get-RecordProperty -Record $record -Name 'ServiceName')
+        ) -join ''
+        Write-Host "[WhatIf] Would restore: $(Get-RecordProperty -Record $record -Name 'Type') $target"
         continue
     }
-
-    foreach ($record in $records) {
-        if ($WhatIf) {
-            Write-Host "[WhatIf] Would restore: $($record.Type) $($record.Path)$($record.Name)$($record.ServiceName)"
-            continue
-        }
-        try {
-            switch ($record.Type) {
-                'Registry' { Restore-RegistryBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
-                'Service'  { Restore-ServiceBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
-                'Hibernation' {
-                    & powercfg.exe /hibernate on
-                    Write-Log -Message "Hibernation re-enabled" -LogFile $logFile -Level OK
-                    $restoredCount++
+    try {
+        switch ($record.Type) {
+            'Registry' { Restore-RegistryBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
+            'Service'  { Restore-ServiceBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
+            'Hibernation' {
+                & powercfg.exe /hibernate on
+                Write-Log -Message "Hibernation re-enabled" -LogFile $logFile -Level OK
+                $restoredCount++
+            }
+            'PowerPlan' {
+                # Records written since v6.1 store the clean GUID directly;
+                # older ones store the raw, locale-dependent
+                # 'powercfg /getactivescheme' output, which is parsed here.
+                $guid = Get-PowerSchemeGuid -SchemeOutput ([string](Get-RecordProperty -Record $record -Name 'OriginalGuid'))
+                if (-not $guid) {
+                    $guid = Get-PowerSchemeGuid -SchemeOutput ([string](Get-RecordProperty -Record $record -Name 'OriginalSchemeRaw'))
                 }
-                'PowerPlan' {
-                    # Parse the GUID out of the recorded 'powercfg /getactivescheme'
-                    # output (e.g. 'Power Scheme GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  (High Performance)').
-                    # If parsing fails, fall back to the original warning.
-                    $guid = $null
-                    if ($record.OriginalGuid) {
-                        $match = [regex]::Match($record.OriginalGuid.ToString(), '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})')
-                        if ($match.Success) { $guid = $match.Groups[1].Value }
-                    }
-                    if ($guid) {
-                        try {
-                            & powercfg.exe /setactive $guid
-                            if ($LASTEXITCODE -eq 0) {
-                                Write-Log -Message "Power plan restored to original GUID: $guid" -LogFile $logFile -Level OK
-                                $restoredCount++
-                            } else {
-                                Write-Log -Message "powercfg /setactive $guid exited with code $LASTEXITCODE - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
-                            }
-                        } catch {
-                            Write-Log -Message "Failed to restore power plan via powercfg: $($_.Exception.Message) - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
+                if ($guid) {
+                    try {
+                        & powercfg.exe /setactive $guid
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-Log -Message "Power plan restored to original GUID: $guid" -LogFile $logFile -Level OK
+                            $restoredCount++
+                        } else {
+                            Write-Log -Message "powercfg /setactive $guid exited with code $LASTEXITCODE - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
                         }
-                    } else {
-                        Write-Log -Message "Power plan original GUID could not be parsed from recorded value: '$($record.OriginalGuid)' - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
+                    } catch {
+                        Write-Log -Message "Failed to restore power plan via powercfg: $($_.Exception.Message) - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
                     }
-                }
-                default {
-                    Write-Log -Message "Unknown backup record type '$($record.Type)' - skipped" -LogFile $logFile -Level WARN
+                } else {
+                    Write-Log -Message "Power plan original GUID could not be determined from the backup record - restore manually via Control Panel > Power Options" -LogFile $logFile -Level WARN
                 }
             }
-        } catch {
-            Write-Log -Message "Failed to restore a record from $($file.Name): $($_.Exception.Message)" -LogFile $logFile -Level ERROR
-            $failedCount++
+            default {
+                Write-Log -Message "Unknown backup record type '$($record.Type)' - skipped" -LogFile $logFile -Level WARN
+            }
         }
+    } catch {
+        Write-Log -Message "Failed to restore a $($record.Type) record: $($_.Exception.Message)" -LogFile $logFile -Level ERROR
+        $failedCount++
     }
+}
 
-    if (-not $WhatIf) {
+if (-not $WhatIf) {
+    foreach ($file in $parsedFiles) {
         Move-Item -Path $file.FullName -Destination (Join-Path $archiveDir $file.Name) -Force
     }
 }
