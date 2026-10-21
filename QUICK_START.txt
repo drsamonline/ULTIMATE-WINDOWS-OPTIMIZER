@@ -1,9 +1,9 @@
-ULTIMATE WINDOWS OPTIMIZER v6.0.1 - QUICK START
+ULTIMATE WINDOWS OPTIMIZER v6.2.0 - QUICK START
 ================================================
 
 1. Extract the ZIP anywhere on your PC.
 
-2. Right-click "scripts\00_Ultimate_Master_v6.0.bat" and choose
+2. Right-click "scripts\00_Ultimate_Master.bat" and choose
    "Run as administrator". (Required - the tool will exit if not elevated.)
 
 3. From the menu, run these first, in order:
