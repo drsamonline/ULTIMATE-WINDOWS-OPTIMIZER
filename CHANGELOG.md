@@ -1,5 +1,66 @@
 # Changelog
 
+## v6.2.0 - Undo holds for services/power plans, verifier fixes, polish
+
+Correctness-and-polish release driven by an independent code audit. The
+reversibility guarantee now holds for **services, power plans and hibernation**,
+not just registry values, and the verifier no longer reports a correctly-applied
+tweak as missing.
+
+- **Undo now restores services and power plans after a re-run.** v6.1.0 made
+  the *registry* path idempotent and de-duplicated registry records on undo, but
+  services and power plans had neither guard. `Set-ServiceStateSafe` recorded
+  the new start mode before switching and had no "already set" check, and the
+  `PowerPlan*` tweaks behaved the same way, while `Select-BackupRecordsToRestore`
+  de-duplicated registry records only. The result: a second run of the same
+  profile recorded the already-tweaked state as the "original", and because undo
+  replays records oldest-first the later, wrong record won - so "Undo All" left
+  services disabled and the power plan changed. Fixed by making
+  `Set-ServiceStateSafe` and both `PowerPlan*` tweaks idempotent (they skip and
+  record nothing when the target state already matches) and by extending
+  `Select-BackupRecordsToRestore` to keep the earliest record per service name,
+  for the single active power plan, and for the single hibernation state.
+- **`Verify-System.ps1` now reports `DisableNetworkThrottling` correctly.** The
+  expected value is the literal `0xffffffff`, but Windows returns a DWord of
+  `0xFFFFFFFF` to PowerShell as the signed Int32 `-1`, so the old `-eq`
+  comparison was always false. Verification now uses the same normalising
+  comparison as the write path (`Test-RegistryValueMatch`, via a new `Type`
+  field on each verification-map entry), so `-1` correctly matches `0xffffffff`.
+- **Service backups are written only after the change succeeds.**
+  `Set-ServiceStateSafe` called `Add-BackupRecord` *before* `Set-Service`, so a
+  failed change could leave a phantom record. The record is now written after
+  the service change, matching the registry path's guarantee.
+- **Hibernation is state-aware.** `DisableHibernation` hardcoded
+  `OriginalState = 'enabled'` and undo unconditionally ran
+  `powercfg /hibernate on`, which could turn hibernation *on* for a machine that
+  had it off. It now reads the current state (`HibernateEnabled`), skips and
+  records nothing when hibernation is already off, and undo restores the state
+  that was actually captured.
+- **`EnableUSBSelectiveSuspend` now does what its name says.** The tweak wrote
+  `HKLM\SYSTEM\CurrentControlSet\Control\Power\CsEnabled = 1`, which is the
+  Connected/Modern Standby flag, not USB selective suspend. It now sets the real
+  per-scheme USB selective-suspend setting (`ACSettingIndex`/`DCSettingIndex` in
+  the active power scheme's USB subgroup) through `Set-RegistryValueSafe`, so it
+  is fully backed up and reversible, re-activates the scheme so it takes effect,
+  and is verified against the active scheme.
+- **Importing the module no longer creates folders.** The log/backup/snapshot
+  directories were created at import time; they are now created lazily on first
+  write via `Ensure-Directory`, so a read-only utility or a `-WhatIf` preview
+  leaves no trace on disk.
+- **`VisualEffectsBalanced` writes the right value.** It wrote `3` ("Custom");
+  it now writes `0` ("Let Windows choose"), which is the actual balanced default.
+- **`Compare-Results.ps1` validates the snapshot selection** (non-numeric or
+  out-of-range input now fails with a clear message instead of comparing blanks).
+- **Launcher renamed** from `00_Ultimate_Master_v6.0.bat` to
+  `00_Ultimate_Master.bat`, and version strings unified at v6.2.0 across the
+  launcher, `QUICK_START.txt`, the module manifest and the README.
+- **Docs and CI.** README refreshed with badges and rendered preview images; a
+  GitHub Actions workflow (`.github/workflows/ci.yml`) runs Pester and
+  PSScriptAnalyzer on `windows-latest`.
+- **Tests updated** for the new de-duplication behaviour (services per service,
+  power plans and hibernation), and `EnableUSBSelectiveSuspend` added to the
+  verifiable-tweak list.
+
 ## v6.1.0 - Undo correctness, idempotency, module packaging
 
 Behaviour-affecting release. The theme is making the reversibility guarantee
@@ -179,7 +240,7 @@ the safety guarantees that v6.0 advertises actually hold in practice.
   to 0 with a warning log line in that case.
 - **SSD detection in `Optimize-Extreme.ps1` and `Optimize-Godlike.ps1`
   was fragile.** It compared `Get-PhysicalDisk`.DeviceId (a string that
-  may be `'0'`, `'\\\\.\\PHYSICALDRIVE0'`, etc. depending on the storage
+  may be `'0'`, `'\\\\\\.\\PHYSICALDRIVE0'`, etc. depending on the storage
   stack) with `Get-Partition`.DiskNumber (an integer). Type coercion made
   `'0' -eq 0` true on most systems, but the comparison silently failed
   on storage stacks that return non-numeric DeviceIds. The try/catch
