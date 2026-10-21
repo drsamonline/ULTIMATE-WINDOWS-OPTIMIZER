@@ -364,8 +364,9 @@ footer{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--
 .foot-bottom .built b{color:var(--green-br)}
 
 /* reveal */
-.reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease, transform .6s ease}
-.reveal.in{opacity:1;transform:none}
+.reveal{transition:opacity .6s ease, transform .6s ease}
+html.js .reveal{opacity:0;transform:translateY(16px)}
+html.js .reveal.in{opacity:1;transform:none}
 
 @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -399,6 +400,7 @@ footer{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--
 }
 </style>
 <style id="__overflow_fix__"> /* horizontal-overflow fixes */ .nav-links,.nav-in{flex-wrap:wrap} .hero-grid>*,.cards>*,.steps>*,.start-grid>*,.demo-grid>*,.foot-grid>*{min-width:0} </style>
+<script>document.documentElement.className += ' js';</script>
 </head>
 <body>
 
@@ -856,8 +858,11 @@ footer{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--
 
   /* reveal on scroll */
   var items = document.querySelectorAll(".reveal");
+  function revealAll(){ items.forEach(function(i){ i.classList.add("in"); }); }
+  function revealInView(){ var vh=window.innerHeight||document.documentElement.clientHeight;
+    items.forEach(function(i){ var r=i.getBoundingClientRect(); if(r.top<vh+40&&r.bottom>-40) i.classList.add("in"); }); }
   if(reduced || !("IntersectionObserver" in window)){
-    items.forEach(function(i){ i.classList.add("in"); });
+    revealAll();
   } else {
     var io = new IntersectionObserver(function(entries){
       entries.forEach(function(en){
@@ -865,6 +870,11 @@ footer{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--
       });
     }, { rootMargin:"0px 0px -8% 0px", threshold:0.08 });
     items.forEach(function(i){ io.observe(i); });
+    setTimeout(revealInView,1000);
+    setTimeout(revealAll,4000);
+    window.addEventListener('scroll',revealInView,{passive:true});
+    window.addEventListener('resize',revealInView,{passive:true});
+    window.addEventListener('load',function(){ setTimeout(revealInView,200); });
   }
 
   /* year */
