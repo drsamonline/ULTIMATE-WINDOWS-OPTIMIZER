@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ultimate Windows Optimizer — Debloat Windows to the metal (PowerShell)</title>
+<meta name="description" content="A PowerShell + batch toolkit that debloats, tweaks and optimizes any Windows 10/11 installation — with real backups, real logging and a one-command undo. No install, no telemetry, no network calls.">
+<meta name="keywords" content="windows optimizer, debloat windows, windows 10 debloat, windows 11 debloat, powershell toolkit, windows tweaks, disable telemetry, privacy, gaming profile, sysadmin, reversible tweaks, ultimate windows optimizer">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="author" content="Dr. Sohil Momin">
+<meta name="theme-color" content="#050705">
+<link rel="canonical" href="https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Ultimate Windows Optimizer">
+<meta property="og:title" content="Ultimate Windows Optimizer — Debloat Windows to the metal.">
+<meta property="og:description" content="PowerShell + batch toolkit for documented, reversible Windows 10/11 tweaks. Real backups, real logging, one-command undo. No install, no telemetry, no network.">
+<meta property="og:url" content="https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/">
+<meta property="og:image" content="https://socialify.git.ci/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/image?name=1&owner=1&description=1&language=1&theme=Dark&font=Inter">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Ultimate Windows Optimizer repository card">
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Ultimate Windows Optimizer — Debloat Windows to the metal.">
+<meta name="twitter:description" content="PowerShell + batch toolkit for documented, reversible Windows 10/11 tweaks. Real backups, real logging, one-command undo.">
+<meta name="twitter:image" content="https://socialify.git.ci/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/image?name=1&owner=1&description=1&language=1&theme=Dark&font=Inter">
+<meta name="twitter:site" content="@DrSamOnline">
+<meta name="twitter:creator" content="@DrSamOnline">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Ultimate Windows Optimizer",
+  "alternateName": "UWO",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows 10, Windows 11",
+  "softwareVersion": "6.2.0",
+  "license": "https://opensource.org/licenses/BSD-3-Clause",
+  "description": "A PowerShell + batch toolkit for applying documented, reversible Windows performance and debloat tweaks — organised into profiles for different use cases.",
+  "url": "https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/",
+  "downloadUrl": "https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip",
+  "codeRepository": "https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER",
+  "programmingLanguage": "PowerShell",
+  "isAccessibleForFree": true,
+  "author": {
+    "@type": "Person",
+    "name": "Dr. Sohil Momin",
+    "url": "https://github.com/DrSamOnline"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  }
+}
+</script>
+
+<style>
+:root{
+  --bg:#050705;
+  --bg-2:#080d09;
+  --panel:#0a110c;
+  --panel-2:#0d150f;
+  --line:#16251b;
+  --line-2:#1e3527;
+  --fg:#d6f5dc;
+  --fg-dim:#8fb39a;
+  --fg-dimmer:#5f7d68;
+  --green:#22c55e;
+  --green-br:#4ade80;
+  --green-deep:#0f3d22;
+  --amber:#fbbf24;
+  --red:#f87171;
+  --cyan:#5eead4;
+  --mono:ui-monospace,"Cascadia Mono","JetBrains Mono","Fira Code",Consolas,"SFMono-Regular",Menlo,"DejaVu Sans Mono",monospace;
+  --wrap:1140px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:var(--mono);
+  font-size:16px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  text-rendering:optimizeLegibility;
+}
+/* CRT scanline + vignette overlay */
+body::before{
+  content:"";
+  position:fixed; inset:0; z-index:9998; pointer-events:none;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(34,197,94,.05), transparent 60%),
+    radial-gradient(140% 120% at 50% 110%, rgba(0,0,0,.55), transparent 55%);
+}
+body::after{
+  content:"";
+  position:fixed; inset:0; z-index:9999; pointer-events:none;
+  background:repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,.28) 3px,
+    rgba(0,0,0,0) 4px
+  );
+  opacity:.55;
+}
+a{color:var(--green-br);text-decoration:none}
+a:hover{color:#86efac;text-decoration:underline;text-underline-offset:3px}
+img{max-width:100%;display:block}
+.wrap{width:100%;max-width:var(--wrap);margin:0 auto;padding:0 22px}
+.mono-caps{letter-spacing:.14em;text-transform:uppercase;font-size:12px}
+
+/* ---------- NAV ---------- */
+.nav{
+  position:sticky; top:0; z-index:900;
+  background:rgba(5,7,5,.82);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.nav-in{display:flex;align-items:center;gap:18px;height:62px}
+.brand{display:flex;align-items:center;gap:11px;font-weight:700;color:var(--fg);letter-spacing:.02em}
+.brand:hover{text-decoration:none;color:var(--fg)}
+.brand .mark{
+  width:30px;height:30px;border:1px solid var(--line-2);border-radius:7px;
+  display:grid;place-items:center;background:var(--panel);
+  box-shadow:0 0 0 1px rgba(34,197,94,.06), 0 0 18px rgba(34,197,94,.12) inset;
+}
+.brand .mark svg{width:17px;height:17px;color:var(--green-br)}
+.brand b{color:var(--green-br)}
+.brand small{display:block;font-weight:400;font-size:10.5px;color:var(--fg-dimmer);letter-spacing:.16em}
+.nav-links{display:flex;gap:6px;margin-left:auto;align-items:center}
+.nav-links a{
+  color:var(--fg-dim);padding:7px 11px;border-radius:6px;font-size:13.5px;
+}
+.nav-links a:hover{color:var(--green-br);background:var(--panel);text-decoration:none}
+.nav-cta{
+  border:1px solid var(--line-2)!important;color:var(--green-br)!important;
+  background:linear-gradient(180deg,rgba(34,197,94,.10),rgba(34,197,94,.02))!important;
+}
+.burger{display:none;background:none;border:1px solid var(--line-2);color:var(--green-br);border-radius:6px;width:40px;height:36px;cursor:pointer}
+.burger svg{width:18px;height:18px;margin:auto}
+
+/* ---------- BUTTONS ---------- */
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  font-family:var(--mono);font-size:14px;font-weight:600;
+  padding:12px 20px;border-radius:8px;cursor:pointer;border:1px solid transparent;
+  transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
+}
+.btn svg{width:16px;height:16px}
+.btn-primary{
+  background:linear-gradient(180deg,var(--green),#16a34a);
+  color:#04150b;border-color:#15803d;
+  box-shadow:0 0 0 1px rgba(74,222,128,.25), 0 8px 30px -8px rgba(34,197,94,.6);
+}
+.btn-primary:hover{color:#04150b;text-decoration:none;transform:translateY(-1px);box-shadow:0 0 0 1px rgba(74,222,128,.4), 0 12px 34px -8px rgba(34,197,94,.75)}
+.btn-ghost{
+  background:var(--panel);color:var(--fg);border-color:var(--line-2);
+}
+.btn-ghost:hover{color:var(--green-br);text-decoration:none;border-color:var(--green);background:var(--panel-2)}
+
+/* ---------- HERO ---------- */
+.hero{position:relative;padding:74px 0 56px;overflow:hidden}
+.hero::before{
+  content:"";position:absolute;inset:0;z-index:-1;
+  background-image:
+    linear-gradient(rgba(34,197,94,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,197,94,.055) 1px, transparent 1px);
+  background-size:44px 44px;
+  mask-image:radial-gradient(120% 80% at 50% 0%, #000 25%, transparent 78%);
+  -webkit-mask-image:radial-gradient(120% 80% at 50% 0%, #000 25%, transparent 78%);
+}
+.hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:44px;align-items:center}
+.eyebrow{
+  display:inline-flex;align-items:center;gap:9px;
+  border:1px solid var(--line-2);background:var(--panel);
+  color:var(--fg-dim);border-radius:999px;padding:6px 14px;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;
+}
+.eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green-br);box-shadow:0 0 10px var(--green-br);animation:pulse 2.4s infinite}
+h1{
+  font-size:clamp(2.1rem,5.2vw,3.5rem);
+  line-height:1.05;margin:20px 0 0;letter-spacing:-.02em;font-weight:800;
+}
+h1 .cursor{
+  display:inline-block;width:.6ch;background:var(--green-br);color:transparent;
+  margin-left:.08em;animation:blink 1.05s steps(1) infinite;vertical-align:baseline;
+  box-shadow:0 0 16px rgba(74,222,128,.7);
+}
+.pitch{color:var(--fg-dim);font-size:clamp(1rem,1.6vw,1.14rem);margin:20px 0 0;max-width:56ch}
+.pitch b{color:var(--fg)}
+.hero-cta{display:flex;flex-wrap:wrap;gap:13px;margin-top:28px}
+.hero-note{margin-top:20px;color:var(--fg-dimmer);font-size:12.5px}
+
+/* CSS badges */
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:26px}
+.badge{
+  display:inline-flex;align-items:center;gap:7px;
+  font-size:11.5px;letter-spacing:.04em;color:var(--fg-dim);
+  border:1px solid var(--line-2);background:var(--panel);border-radius:6px;padding:5px 10px;
+}
+.badge svg{width:13px;height:13px;color:var(--green-br);flex:none}
+.badge.hot{color:var(--green-br);border-color:#1d5a34;background:rgba(34,197,94,.07)}
+.shields{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.shields img{height:26px;width:auto}
+
+/* ---------- TERMINAL WINDOW ---------- */
+.term{
+  background:linear-gradient(180deg,#070c08,#040704);
+  border:1px solid var(--line-2);border-radius:12px;overflow:hidden;
+  box-shadow:0 24px 70px -30px rgba(34,197,94,.5), 0 0 0 1px rgba(34,197,94,.05);
+}
+.term-bar{
+  display:flex;align-items:center;gap:8px;
+  padding:10px 13px;background:linear-gradient(180deg,#0d150f,#0a110c);
+  border-bottom:1px solid var(--line);
+}
+.term-bar .tl{width:11px;height:11px;border-radius:50%}
+.tl.r{background:#ff5f56}.tl.y{background:#ffbd2e}.tl.g{background:#27c93f}
+.term-title{margin-left:8px;font-size:11.5px;color:var(--fg-dimmer);letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.term-copy{
+  margin-left:auto;background:none;border:1px solid var(--line-2);color:var(--fg-dimmer);
+  border-radius:5px;font-family:var(--mono);font-size:10.5px;padding:3px 8px;cursor:pointer;
+}
+.term-copy:hover{color:var(--green-br);border-color:var(--green)}
+.term-body{padding:15px 16px;font-size:13px;line-height:1.7;overflow-x:auto;white-space:pre;tab-size:2}
+.term-body .p{color:var(--green-br)}
+.term-body .c{color:#e8fbee}
+.term-body .o{color:var(--fg-dim)}
+.term-body .g{color:var(--green)}
+.term-body .y{color:var(--amber)}
+.term-body .r{color:var(--red)}
+.term-body .cy{color:var(--cyan)}
+.term-body .dim{color:var(--fg-dimmer)}
+.term-body .hl{color:var(--green-br);font-weight:700}
+
+/* ---------- SECTION SHELL ---------- */
+section{padding:74px 0;position:relative}
+.sec-head{max-width:62ch;margin-bottom:38px}
+.sec-head .kicker{color:var(--green-br);letter-spacing:.18em;font-size:12px;text-transform:uppercase}
+h2{font-size:clamp(1.5rem,3.2vw,2.1rem);margin:12px 0 0;letter-spacing:-.01em;font-weight:750}
+h2 .hash{color:var(--green);opacity:.75}
+.sec-head p{color:var(--fg-dim);margin:14px 0 0}
+.divider{height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent);border:0;margin:0}
+
+/* ---------- FEATURE CARDS ---------- */
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.card{
+  background:linear-gradient(180deg,var(--panel),var(--bg-2));
+  border:1px solid var(--line);border-radius:12px;padding:24px 22px;position:relative;overflow:hidden;
+  transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.card::after{
+  content:"";position:absolute;left:0;top:0;height:2px;width:100%;
+  background:linear-gradient(90deg,transparent,var(--green),transparent);
+  opacity:0;transition:opacity .25s ease;
+}
+.card:hover{border-color:var(--line-2);transform:translateY(-3px);box-shadow:0 18px 44px -26px rgba(34,197,94,.55)}
+.card:hover::after{opacity:.9}
+.card .ico{
+  width:42px;height:42px;border-radius:9px;display:grid;place-items:center;
+  border:1px solid var(--line-2);background:rgba(34,197,94,.07);margin-bottom:16px;
+}
+.card .ico svg{width:21px;height:21px;color:var(--green-br)}
+.card h3{margin:0 0 8px;font-size:16.5px;letter-spacing:.01em}
+.card p{margin:0;color:var(--fg-dim);font-size:13.8px}
+.card .tag{position:absolute;top:20px;right:20px;font-size:10.5px;color:var(--fg-dimmer);letter-spacing:.1em}
+
+/* ---------- STEPS ---------- */
+.steps{display:grid;grid-template-columns:1fr 1.05fr;gap:40px;align-items:start}
+ol.step-list{list-style:none;margin:0;padding:0;counter-reset:s}
+ol.step-list li{
+  position:relative;padding:0 0 26px 52px;counter-increment:s;
+}
+ol.step-list li::before{
+  content:counter(s,decimal-leading-zero);
+  position:absolute;left:0;top:-2px;
+  width:34px;height:34px;border-radius:8px;display:grid;place-items:center;
+  font-size:13px;font-weight:700;color:var(--green-br);
+  border:1px solid var(--line-2);background:var(--panel);
+}
+ol.step-list li::after{
+  content:"";position:absolute;left:16.5px;top:36px;bottom:2px;width:1px;background:var(--line);
+}
+ol.step-list li:last-child::after{display:none}
+ol.step-list li:last-child{padding-bottom:0}
+ol.step-list h3{margin:0 0 5px;font-size:15.5px}
+ol.step-list p{margin:0;color:var(--fg-dim);font-size:13.6px}
+
+/* ---------- PROFILES TABLE ---------- */
+.table-wrap{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg-2)}
+table{width:100%;border-collapse:collapse;font-size:13.4px}
+thead th{
+  text-align:left;padding:13px 16px;background:var(--panel-2);
+  color:var(--green-br);font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;
+  border-bottom:1px solid var(--line-2);white-space:nowrap;
+}
+tbody td{padding:13px 16px;border-bottom:1px solid var(--line);color:var(--fg-dim);vertical-align:top}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(34,197,94,.035)}
+tbody td:first-child{color:var(--fg);font-weight:600;white-space:nowrap}
+tbody td:first-child .k{color:var(--green)}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--line-2);color:var(--fg-dim)}
+
+/* ---------- DEMO ---------- */
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.shot{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg-2);transition:border-color .2s ease}
+.shot:hover{border-color:var(--line-2)}
+.shot .shot-body{padding:18px;background:radial-gradient(90% 90% at 50% 0%, rgba(34,197,94,.05), transparent 70%)}
+.shot img{width:100%;border-radius:8px;border:1px solid var(--line)}
+.shot .cap{padding:12px 16px;border-top:1px solid var(--line);font-size:12.4px;color:var(--fg-dimmer)}
+.shot .cap b{color:var(--fg-dim);font-weight:600}
+
+/* ---------- GET STARTED ---------- */
+.start-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+.panel{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:12px;padding:24px}
+.panel h3{margin:0 0 14px;font-size:15.5px}
+.req{list-style:none;margin:0;padding:0}
+.req li{display:flex;gap:11px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13.6px;color:var(--fg-dim)}
+.req li:last-child{border-bottom:0}
+.req svg{width:16px;height:16px;color:var(--green-br);flex:none;margin-top:3px}
+.dl-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:6px}
+
+/* ---------- FAQ ---------- */
+.faq{max-width:840px}
+details{
+  border:1px solid var(--line);border-radius:10px;background:var(--panel);
+  margin-bottom:11px;overflow:hidden;transition:border-color .2s ease;
+}
+details[open]{border-color:var(--line-2)}
+summary{
+  cursor:pointer;list-style:none;padding:16px 18px;font-size:14.6px;color:var(--fg);
+  display:flex;align-items:center;gap:12px;font-weight:600;
+}
+summary::-webkit-details-marker{display:none}
+summary .chev{margin-left:auto;transition:transform .2s ease;color:var(--green-br);flex:none}
+summary .chev svg{width:15px;height:15px;display:block}
+details[open] summary .chev{transform:rotate(90deg)}
+summary .qm{color:var(--green);font-weight:700}
+details .ans{padding:0 18px 18px 45px;color:var(--fg-dim);font-size:13.6px}
+details .ans code{background:#08120b;border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--green-br);font-size:12.5px}
+
+/* ---------- FOOTER ---------- */
+footer{border-top:1px solid var(--line);background:linear-gradient(180deg,var(--bg),#030503);padding:52px 0 40px}
+.foot-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:34px}
+.foot-grid h4{margin:0 0 12px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--fg-dimmer)}
+.foot-grid a{display:block;color:var(--fg-dim);padding:4px 0;font-size:13.6px}
+.foot-grid a:hover{color:var(--green-br)}
+.foot-brand p{color:var(--fg-dimmer);font-size:13.2px;max-width:40ch;margin:12px 0 0}
+.foot-bottom{
+  margin-top:38px;padding-top:22px;border-top:1px solid var(--line);
+  display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;
+  color:var(--fg-dimmer);font-size:12.6px;
+}
+.foot-bottom .built{color:var(--fg-dim)}
+.foot-bottom .built b{color:var(--green-br)}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(16px);transition:opacity .6s ease, transform .6s ease}
+.reveal.in{opacity:1;transform:none}
+
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width:960px){
+  .hero-grid{grid-template-columns:1fr;gap:34px}
+  .cards{grid-template-columns:1fr 1fr}
+  .steps,.start-grid,.demo-grid{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:1fr 1fr}
+}
+@media (max-width:660px){
+  .nav-links{
+    position:absolute;top:62px;left:0;right:0;flex-direction:column;align-items:stretch;
+    background:rgba(5,7,5,.98);border-bottom:1px solid var(--line-2);padding:12px;gap:4px;display:none;
+  }
+  .nav-links.open{display:flex}
+  .nav-links a{padding:11px 12px}
+  .burger{display:grid;margin-left:auto}
+  .cards{grid-template-columns:1fr}
+  .foot-grid{grid-template-columns:1fr}
+  section{padding:56px 0}
+  .term-body{font-size:11.6px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .reveal{opacity:1;transform:none}
+  h1 .cursor{animation:none;opacity:1}
+}
+</style>
+</head>
+<body>
+
+<!-- ================= NAV ================= -->
+<nav class="nav" aria-label="Primary">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top" aria-label="Ultimate Windows Optimizer home">
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/></svg>
+      </span>
+      <span>UWO<small>ULTIMATE&nbsp;WINDOWS&nbsp;OPTIMIZER</small></span>
+    </a>
+    <button class="burger" id="burger" aria-label="Toggle navigation" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="nav-links" id="navlinks">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#profiles">Profiles</a>
+      <a href="#demo">Demo</a>
+      <a href="#start">Get started</a>
+      <a href="#faq">FAQ</a>
+      <a class="nav-cta" href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.2-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.7 4.6 18.7 5 18.7 5c.6 1.6.2 2.8.1 3.1.8.9 1.2 1.9 1.2 3.2 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ================= HERO ================= -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow"><span class="dot"></span> PowerShell · Windows 10 / 11 · BSD-3-Clause</span>
+      <h1>Debloat Windows<br>to the metal.<span class="cursor" aria-hidden="true">_</span></h1>
+      <p class="pitch">
+        The <b>Ultimate Windows Optimizer</b> is a PowerShell + batch toolkit that applies
+        documented, reversible performance and debloat tweaks to any Windows 10/11 install —
+        wired into profiles, with <b>real backups, real logging and a one-command undo</b>.
+        No install. No telemetry. No network calls.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+          Download the toolkit
+        </a>
+        <a class="btn btn-ghost" href="#how">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9z"/></svg>
+          See how it runs
+        </a>
+      </div>
+
+      <div class="badges" aria-label="Key facts">
+        <span class="badge hot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>Windows 10 / 11</span>
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 9l3 3-3 3M13 15h3"/></svg>PowerShell 5.1+</span>
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg>Reversible by design</span>
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 7 4-14 3 7h4"/></svg>Real benchmarking</span>
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0120 0"/><path d="M2 12l20-6M2 12l20 6" opacity=".4"/><path d="M8.5 5.5l3 5 3-5"/></svg>No network · no telemetry</span>
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>No installer</span>
+        <span class="badge">v6.2.0</span>
+      </div>
+
+      <div class="shields" aria-label="Live repository badges">
+        <img alt="GitHub stars" src="https://img.shields.io/github/stars/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&logo=github&color=22c55e&labelColor=0a110c" onerror="this.style.display='none'">
+        <img alt="GitHub forks" src="https://img.shields.io/github/forks/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&logo=github&color=22c55e&labelColor=0a110c" onerror="this.style.display='none'">
+        <img alt="GitHub last commit" src="https://img.shields.io/github/last-commit/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&color=4ade80&labelColor=0a110c" onerror="this.style.display='none'">
+        <img alt="GitHub repo size" src="https://img.shields.io/github/repo-size/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&color=22c55e&labelColor=0a110c" onerror="this.style.display='none'">
+        <img alt="License" src="https://img.shields.io/github/license/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&color=22c55e&labelColor=0a110c" onerror="this.style.display='none'">
+        <img alt="Language" src="https://img.shields.io/github/languages/top/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&color=4ade80&labelColor=0a110c" onerror="this.style.display='none'">
+      </div>
+      <p class="hero-note">&gt; _ no percentage gains promised — measure your own with the built-in snapshot &amp; compare tools.</p>
+    </div>
+
+    <!-- hero terminal -->
+    <div class="term reveal">
+      <div class="term-bar">
+        <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+        <span class="term-title">Administrator: C:\UWO\scripts\00_Ultimate_Master.bat</span>
+        <button class="term-copy" data-copy="#hero-cmd" type="button">copy</button>
+      </div>
+      <div class="term-body" id="hero-cmd"><span class="dim">PS C:\UWO\scripts&gt;</span> <span class="c">.\00_Ultimate_Master.bat</span>
+<span class="dim">[admin check] elevation confirmed</span>
+<span class="cy">=========================================================</span>
+<span class="cy">  ULTIMATE WINDOWS OPTIMIZER v6.2.0</span>
+<span class="cy">=========================================================</span>
+<span class="o">  [1] Daily Home    [2] Gaming      [3] Office</span>
+<span class="o">  [4] Laptop        [5] Extreme     [6] Godlike</span>
+<span class="o">  [7] Server        [8] Streaming</span>
+<span class="o">  [9] Compatibility  [M] Snapshot  [U] UNDO ALL</span>
+<span class="c">Select an option:</span> <span class="hl">2</span>
+
+<span class="p">&gt;&gt;</span> <span class="c">Applying profile: Gaming</span>
+<span class="g">  [ ok ]</span> <span class="o">GPU hardware scheduling ......... enabled</span>
+<span class="g">  [ ok ]</span> <span class="o">Foreground priority boost ....... 26 (hex 0x1a)</span>
+<span class="g">  [ ok ]</span> <span class="o">Network throttling .............. removed</span>
+<span class="g">  [ ok ]</span> <span class="o">Game DVR ........................ disabled</span>
+<span class="g">  [ ok ]</span> <span class="o">Power plan ...................... High Performance</span>
+<span class="y">  [backup]</span> <span class="dim">original values -&gt; OptimizationLogs\Backups</span>
+<span class="cy">  Profile applied. 5/5 tweaks logged.</span>
+<span class="dim">PS C:\UWO\scripts&gt;</span> <span class="c">_</span></div>
+    </div>
+  </div>
+</header>
+
+<hr class="divider">
+
+<!-- ================= FEATURES ================= -->
+<section id="features">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// why this one</span>
+      <h2><span class="hash">#</span> Tweaks you can actually undo</h2>
+      <p>Most "optimizers" are one-way doors. This one records the previous state of everything it touches and can put your machine back exactly as it was.</p>
+    </div>
+
+    <div class="cards">
+      <article class="card reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M9 12l2 2 4-4"/></svg></div>
+        <h3>Reversible by design</h3>
+        <p>Every registry value, service, hibernation setting and power plan is captured <em>before</em> it changes. <code>Undo-All-Changes.ps1</code> restores the earliest recorded original — nothing else.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3h11l3 3v15H5z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></div>
+        <h3>Real logging &amp; backups</h3>
+        <p>Logs land in <code>%USERPROFILE%\OptimizationLogs</code>, with per-run JSON backups written only <em>after</em> a change actually succeeds — so undo never "restores" something that never applied.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg></div>
+        <h3>Eight real profiles</h3>
+        <p>Daily Home, Gaming, Office, Laptop, Extreme, Godlike, Server and Streaming — each applies a genuinely different, documented tweak set, read from one source-of-truth catalog.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/><path d="M12 8v4m0 3h.01"/></svg></div>
+        <h3>Verification, not vibes</h3>
+        <p><code>Verify-System.ps1</code> reads the live registry and service state back and tells you what is actually applied — it never assumes a tweak worked.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M6 20V10M11 20V4M16 20v-7M21 20v-11"/></svg></div>
+        <h3>Measure your own gains</h3>
+        <p>Snapshot CPU load, RAM, disk and top processes before and after, then <code>Compare-Results.ps1</code> diffs two real snapshots. No canned numbers, ever.</p>
+      </article>
+
+      <article class="card reveal">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0120 0"/><path d="M2 12l20-6M2 12l20 6" opacity=".35"/><path d="M9 4.5l3 6 3-6"/></svg></div>
+        <h3>Offline &amp; quiet</h3>
+        <p>No installer, no <code>Invoke-Expression</code>, no scheduled tasks, no security-product changes. Zero outbound calls, zero telemetry, zero credential access.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ================= HOW IT WORKS ================= -->
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// how it works</span>
+      <h2><span class="hash">#</span> Elevate, snapshot, apply, verify</h2>
+      <p>Four moves. The first two are the safety net; the last two are the payoff.</p>
+    </div>
+
+    <div class="steps">
+      <ol class="step-list">
+        <li class="reveal">
+          <h3>Run the launcher as administrator</h3>
+          <p>Right-click <code>scripts\00_Ultimate_Master.bat</code> → <em>Run as administrator</em>. The launcher exits immediately if it isn't elevated.</p>
+        </li>
+        <li class="reveal">
+          <h3>Check compatibility &amp; take a restore point</h3>
+          <p>Option <code>9</code> runs real PASS/FAIL checks (admin, OS build, PowerShell, RAM, disk, System Restore). Option <code>S</code> creates a System Restore point.</p>
+        </li>
+        <li class="reveal">
+          <h3>Snapshot a baseline, then pick a profile</h3>
+          <p>Option <code>M</code> saves a labeled snapshot — call it <em>Baseline</em>. Then choose the profile (<code>1</code>–<code>8</code>) that matches your machine.</p>
+        </li>
+        <li class="reveal">
+          <h3>Verify, compare, or undo</h3>
+          <p><code>V</code> verifies a profile was applied, <code>R</code> compares two snapshots for real before/after numbers, and <code>U</code> reverts every tracked change.</p>
+        </li>
+      </ol>
+
+      <div class="term reveal">
+        <div class="term-bar">
+          <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+          <span class="term-title">PowerShell — verify &amp; compare</span>
+          <button class="term-copy" data-copy="#how-cmd" type="button">copy</button>
+        </div>
+        <div class="term-body" id="how-cmd"><span class="dim">PS&gt;</span> <span class="c">.\Verify-System.ps1 -Profile Gaming</span>
+<span class="cy">Verifying registry + service state against 'Gaming'...</span>
+<span class="g">  [APPLIED]</span> <span class="o">GpuHardwareScheduling</span>
+<span class="g">  [APPLIED]</span> <span class="o">ForegroundPriorityBoost</span>
+<span class="g">  [APPLIED]</span> <span class="o">DisableNetworkThrottling</span>
+<span class="y">  [NOT APPLIED]</span> <span class="o">DisablePagingExecutive  (RAM &lt; 16 GB gate)</span>
+<span class="cy">  Result: 3 applied, 1 skipped by hardware gate, 0 failed.</span>
+
+<span class="dim">PS&gt;</span> <span class="c">.\Compare-Results.ps1</span>
+<span class="cy">  1) Baseline   2) AfterGaming</span>
+<span class="c">Select two snapshots:</span> <span class="hl">1 2</span>
+<span class="o">  CPU load   </span> <span class="y">31% -&gt; 22%</span>   <span class="g">( -9 pts )</span>
+<span class="o">  RAM used   </span> <span class="y">9.4 -&gt; 8.1 GB</span>  <span class="g">( -1.3 GB )</span>
+<span class="o">  Disk free  </span> <span class="y">41 -&gt; 46 GB</span>   <span class="g">( +5 GB )</span>
+<span class="dim">PS&gt;</span> <span class="c">_</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ================= PROFILES ================= -->
+<section id="profiles">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// profiles</span>
+      <h2><span class="hash">#</span> Pick your machine, not a preset</h2>
+      <p>Every profile is a distinct, documented set of tweaks — and each one says what it deliberately does <em>not</em> do.</p>
+    </div>
+
+    <div class="table-wrap reveal">
+      <table>
+        <thead>
+          <tr><th>Profile</th><th>Key tweaks</th><th>Notably does not</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="k">[1]</span> Daily Home</td><td>Telemetry off, Start-menu ads off, background apps off, balanced visual effects, Balanced power plan</td><td>No GPU / priority / memory tweaks</td></tr>
+          <tr><td><span class="k">[2]</span> Gaming</td><td>GPU hardware scheduling, foreground priority boost, network throttling removed, Game DVR off, High Performance plan</td><td>Not for battery-powered laptops</td></tr>
+          <tr><td><span class="k">[3]</span> Office</td><td>Background-app + Xbox-service removal, explicit balanced priority separation</td><td>No GPU scheduling or priority boost</td></tr>
+          <tr><td><span class="k">[4]</span> Laptop</td><td>USB selective suspend, HAGS disabled to save power on hybrid-GPU laptops, Balanced plan</td><td>Never disables hibernation or paging</td></tr>
+          <tr><td><span class="k">[5]</span> Extreme</td><td>Everything in Gaming + hibernation removed; paging tweak only if RAM ≥ 16 GB; Superfetch off only on confirmed SSD</td><td>Desktop only</td></tr>
+          <tr><td><span class="k">[6]</span> Godlike</td><td>Everything in Extreme + Windows Search indexing off + Xbox services off</td><td>Requires typing <span class="pill">CONFIRM</span> — trades search speed</td></tr>
+          <tr><td><span class="k">[7]</span> Server</td><td>Search indexing &amp; Xbox services off, hibernation removed, background-service CPU priority (opposite of Gaming)</td><td>No GPU / gaming tweaks</td></tr>
+          <tr><td><span class="k">[8]</span> Streaming</td><td>Gaming tweaks + <code>SystemResponsiveness</code> lowered so capture/encoding isn't CPU-starved</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="hero-note" style="margin-top:14px">&gt; _ the profile catalog in <code>scripts/UWO.psm1</code> is the single source of truth — this table, the verifier and what runs can no longer drift apart.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ================= DEMO ================= -->
+<section id="demo">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// demo</span>
+      <h2><span class="hash">#</span> What it actually looks like</h2>
+      <p>Faithful renders of the toolkit's real console output — applying a profile, verifying state, and snapshotting performance.</p>
+    </div>
+
+    <div class="demo-grid">
+      <figure class="shot reveal" style="margin:0">
+        <div class="shot-body"><img src="images/main-menu.svg" alt="Ultimate Windows Optimizer launcher menu" width="672" height="730"></div>
+        <figcaption class="cap"><b>Launcher.</b> One menu for every profile and utility.</figcaption>
+      </figure>
+      <figure class="shot reveal" style="margin:0">
+        <div class="shot-body"><img src="images/gaming-run.svg" alt="Applying the Gaming profile, every tweak logged"></div>
+        <figcaption class="cap"><b>Applying a profile.</b> Every tweak is logged as it is set.</figcaption>
+      </figure>
+      <figure class="shot reveal" style="margin:0">
+        <div class="shot-body"><img src="images/verify-system.svg" alt="Verifying a profile against real system state"></div>
+        <figcaption class="cap"><b>Verify-System.</b> Checks real state — it does not assume success.</figcaption>
+      </figure>
+      <figure class="shot reveal" style="margin:0">
+        <div class="shot-body"><img src="images/performance-snapshot.svg" alt="Performance snapshot saved with a real label"></div>
+        <figcaption class="cap"><b>Performance snapshot.</b> Saves a real, labeled snapshot you can diff.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ================= GET STARTED ================= -->
+<section id="start">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// get started</span>
+      <h2><span class="hash">#</span> Download, extract, elevate</h2>
+      <p>No install step — it's scripts. Grab the archive, unzip it anywhere, and run the launcher as administrator.</p>
+    </div>
+
+    <div class="start-grid">
+      <div class="panel reveal">
+        <h3>Requirements</h3>
+        <ul class="req">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Windows 10 (build 17763+) or Windows 11</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> PowerShell 5.1+ (built into Windows)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Administrator rights</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> Run <code>Compatibility-Check.ps1</code> first (menu <code>9</code>)</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg> No internet connection required — ever</li>
+        </ul>
+        <div class="dl-row" style="margin-top:20px">
+          <a class="btn btn-primary" href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+            Download .zip
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.2-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0C17.7 4.6 18.7 5 18.7 5c.6 1.6.2 2.8.1 3.1.8.9 1.2 1.9 1.2 3.2 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+      </div>
+
+      <div class="term reveal">
+        <div class="term-bar">
+          <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+          <span class="term-title">PowerShell (Administrator) — quick start</span>
+          <button class="term-copy" data-copy="#start-cmd" type="button">copy</button>
+        </div>
+        <div class="term-body" id="start-cmd"><span class="dim"># 1. extract the zip anywhere, then:</span>
+<span class="dim">PS C:\Users\you&gt;</span> <span class="c">cd C:\UWO\scripts</span>
+
+<span class="dim"># 2. elevate — right-click, "Run as administrator", or:</span>
+<span class="dim">PS C:\UWO\scripts&gt;</span> <span class="c">Start-Process .\00_Ultimate_Master.bat -Verb RunAs</span>
+
+<span class="dim"># 3. in the menu, in order:</span>
+<span class="g">  [9]</span> <span class="o">Compatibility Check</span>
+<span class="g">  [S]</span> <span class="o">Create System Restore Point</span>
+<span class="g">  [M]</span> <span class="o">Performance Snapshot -&gt; label "Baseline"</span>
+<span class="g">  [2]</span> <span class="o">Apply a profile (e.g. Gaming)</span>
+
+<span class="dim"># undo everything, exactly:</span>
+<span class="dim">PS C:\UWO\scripts&gt;</span> <span class="c">.\Undo-All-Changes.ps1 -WhatIf</span>
+<span class="y">  Preview only. Nothing was changed.</span>
+<span class="dim">PS C:\UWO\scripts&gt;</span> <span class="c">_</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ================= FAQ ================= -->
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="kicker">// faq</span>
+      <h2><span class="hash">#</span> Questions, answered plainly</h2>
+    </div>
+
+    <div class="faq">
+      <details class="reveal" open>
+        <summary><span class="qm">?</span> Will this actually make my PC faster? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">It applies documented tweaks (telemetry off, GPU scheduling, power plans, visual effects and so on) that can reduce background load. But it is <strong>not</strong> a magic multiplier — results depend entirely on your hardware and workload, and no specific percentage improvement is promised anywhere in the toolkit. Use <code>Performance-Monitor.ps1</code> and <code>Compare-Results.ps1</code> to measure your own real before/after numbers.</div>
+      </details>
+
+      <details class="reveal">
+        <summary><span class="qm">?</span> Is it safe? Can I undo everything? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">Yes — reversibility is the whole point. The previous state of every registry value, service, hibernation setting and power plan is captured <em>before</em> the change and written to a per-run JSON backup as soon as the change succeeds. <code>Undo-All-Changes.ps1</code> reads every backup and restores the earliest recorded original. It supports <code>-WhatIf</code> to preview, and tolerates corrupted backup files without aborting.</div>
+      </details>
+
+      <details class="reveal">
+        <summary><span class="qm">?</span> Does it phone home or need the internet? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">No. The toolkit makes no outbound calls, sends no telemetry and reads no credentials. There is no downloader, no <code>Invoke-Expression</code>, no scheduled tasks and no security-product changes. An optional dependency menu only <em>opens</em> official vendor download pages — it never silently runs anything.</div>
+      </details>
+
+      <details class="reveal">
+        <summary><span class="qm">?</span> What's the difference between profiles? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">Each profile is a genuinely different, documented set of tweaks — see the profiles table above. Gaming favours foreground apps and GPU scheduling; Server does the opposite and favours background services; Laptop is battery-aware and never disables hibernation or paging; Extreme and Godlike are desktop-only, hardware-gated, and Godlike requires typing <code>CONFIRM</code> because it disables Windows Search indexing.</div>
+      </details>
+
+      <details class="reveal">
+        <summary><span class="qm">?</span> Re-running a profile — will it double-apply? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">No. Re-running a profile is a no-op for anything that already matches — nothing is written and no backup record is added, so a second run can't record an already-tweaked value as your "original". As a second line of defence, undo de-duplicates records across all backup files by logical target and always restores the earliest original.</div>
+      </details>
+
+      <details class="reveal">
+        <summary><span class="qm">?</span> What does it need to run? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">Windows 10 (build 17763+) or Windows 11, PowerShell 5.1+ (built in), and administrator rights. There's no installer — it's a folder of scripts. Run <code>Compatibility-Check.ps1</code> (menu <code>9</code>) first to confirm your machine meets these.</div>
+      </details>
+
+      <details class="reveal">
+        <summary><span class="qm">?</span> Is it open source and free? <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></summary>
+        <div class="ans">Yes. It's released under the BSD 3-Clause licence and the source is on GitHub. Pull requests are welcome.</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top">
+          <span class="mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M7 9l3 3-3 3M12.5 15H17"/></svg>
+          </span>
+          <span>UWO<small>ULTIMATE&nbsp;WINDOWS&nbsp;OPTIMIZER</small></span>
+        </a>
+        <p>Documented, reversible Windows 10/11 debloat &amp; performance tweaks. Run it, measure it, undo it.</p>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <a href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER" target="_blank" rel="noopener">Repository</a>
+        <a href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER#readme" target="_blank" rel="noopener">README</a>
+        <a href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        <a href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/blob/main/LICENSE" target="_blank" rel="noopener">License (BSD-3)</a>
+      </div>
+      <div>
+        <h4>On this page</h4>
+        <a href="#features">Features</a>
+        <a href="#how">How it works</a>
+        <a href="#profiles">Profiles</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span class="built">Built by <b>Dr. Sohil Momin</b> &nbsp;·&nbsp; Coding For Fun</span>
+      <span>&copy; <span id="yr">2026</span> Ultimate Windows Optimizer · <a href="https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER" target="_blank" rel="noopener">github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  "use strict";
+  var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* mobile nav */
+  var burger = document.getElementById("burger");
+  var links = document.getElementById("navlinks");
+  if(burger && links){
+    burger.addEventListener("click", function(){
+      var open = links.classList.toggle("open");
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+    links.addEventListener("click", function(e){
+      if(e.target.tagName === "A"){ links.classList.remove("open"); burger.setAttribute("aria-expanded","false"); }
+    });
+  }
+
+  /* copy buttons */
+  document.querySelectorAll(".term-copy").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var el = document.querySelector(btn.getAttribute("data-copy"));
+      if(!el) return;
+      var text = el.innerText;
+      var done = function(){ var t = btn.textContent; btn.textContent = "copied"; setTimeout(function(){ btn.textContent = t; }, 1400); };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try{ document.execCommand("copy"); }catch(e){}
+        document.body.removeChild(ta); done();
+      }
+    });
+  });
+
+  /* reveal on scroll */
+  var items = document.querySelectorAll(".reveal");
+  if(reduced || !("IntersectionObserver" in window)){
+    items.forEach(function(i){ i.classList.add("in"); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ en.target.classList.add("in"); io.unobserve(en.target); }
+      });
+    }, { rootMargin:"0px 0px -8% 0px", threshold:0.08 });
+    items.forEach(function(i){ io.observe(i); });
+  }
+
+  /* year */
+  var yr = document.getElementById("yr");
+  if(yr){ yr.textContent = new Date().getFullYear(); }
+})();
+</script>
+</body>
+</html>
