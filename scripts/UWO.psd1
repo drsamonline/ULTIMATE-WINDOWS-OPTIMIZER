@@ -1,6 +1,6 @@
 @{
     RootModule        = 'UWO.psm1'
-    ModuleVersion     = '6.1.0'
+    ModuleVersion     = '6.2.0'
     GUID              = 'c0f6f2b1-3f0c-4a4a-9f2c-6f2a1a0d5f21'
     Author            = 'Dr. Sohil Momin (Coding For Fun / @DrSamOnline)'
     Description       = 'Shared engine for Ultimate Windows Optimizer: logging, registry/service safe-set with JSON backups, backup retention, verification maps and the profile/tweak catalog.'
@@ -9,6 +9,7 @@
     FunctionsToExport = @(
         'Test-IsAdmin'
         'Assert-Admin'
+        'Ensure-Directory'
         'New-LogFile'
         'Write-Log'
         'New-BackupFile'
@@ -27,6 +28,8 @@
         'Restore-ServiceBackupRecord'
         'Invoke-NativeCommand'
         'Get-PowerSchemeGuid'
+        'Get-ActivePowerSchemeGuid'
+        'Get-UsbSelectiveSuspendKey'
         'Get-SystemSnapshot'
         'Save-SystemSnapshot'
         'Invoke-Tweak'
@@ -36,6 +39,7 @@
         'Get-TweakServiceMap'
         'Get-TweakMultiServiceMap'
         'Get-TweakPowerPlanMap'
+        'Get-TweakRuntimeMap'
         'Get-ProfileDefinition'
         'Get-ProfileName'
         'Get-ProfileTweak'

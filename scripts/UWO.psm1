@@ -22,6 +22,15 @@
     Nothing in this file requires internet access. Nothing in this file
     is destructive without first writing a JSON backup record that
     Undo-All-Changes.ps1 can read to restore the exact previous state.
+
+    v6.2.0 notes:
+      - The log/backup/snapshot directories are now created lazily, the first
+        time something is actually written, instead of at import time. A
+        read-only utility (or a -WhatIf preview) no longer touches the disk.
+      - Services, power plans and hibernation are now idempotent and
+        de-duplicated on undo, exactly like registry values (see
+        Set-ServiceStateSafe, the PowerPlan* tweaks and
+        Select-BackupRecordsToRestore).
 #>
 
 Set-StrictMode -Version Latest
@@ -38,9 +47,8 @@ $Script:BackupDir      = Join-Path $Script:RootLogDir 'Backups'
 $Script:SnapshotDir    = Join-Path $Script:RootLogDir 'Snapshots'
 $Script:BackupArchiveDir = Join-Path $Script:BackupDir 'restored'
 
-foreach ($dir in @($Script:RootLogDir, $Script:BackupDir, $Script:SnapshotDir)) {
-    if (-not (Test-Path $dir)) { New-Item -Path $dir -ItemType Directory -Force | Out-Null }
-}
+# Directories are created on first write, not at import time (see
+# Ensure-Directory), so importing the module has no filesystem side effects.
 
 function Get-UwoLogDirectory      { return $Script:RootLogDir }
 function Get-UwoBackupDirectory   { return $Script:BackupDir }
@@ -69,8 +77,16 @@ function Assert-Admin {
 # Logging
 # ---------------------------------------------------------------------------
 
+function Ensure-Directory {
+    # Creates a directory only when it is about to be written to, so simply
+    # importing the module (or running a read-only utility) leaves no trace.
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path $Path)) { New-Item -Path $Path -ItemType Directory -Force | Out-Null }
+}
+
 function New-LogFile {
     param([Parameter(Mandatory)][string]$Name)
+    Ensure-Directory -Path $Script:RootLogDir
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $path = Join-Path $Script:RootLogDir "$Name`_$timestamp.log"
     New-Item -Path $path -ItemType File -Force | Out-Null
@@ -99,6 +115,7 @@ function Write-Log {
 
 function New-BackupFile {
     param([Parameter(Mandatory)][string]$Name)
+    Ensure-Directory -Path $Script:BackupDir
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $path = Join-Path $Script:BackupDir "$Name`_$timestamp.json"
     # Write a literal '[]' so the file is a valid empty JSON array.
@@ -391,21 +408,40 @@ function Set-ServiceStateSafe {
             Write-Log -Message "Service '$ServiceName' not found on this system - skipped" -LogFile $LogFile -Level WARN
             return $false
         }
-        $originalStartMode = Get-ServiceStartMode -Service $svc   # Auto / Manual / Disabled
-        $originalStatus    = $svc.Status
 
-        Add-BackupRecord -BackupFile $BackupFile -Record @{
-            Type               = 'Service'
-            ServiceName        = $ServiceName
-            OriginalStartMode  = $originalStartMode
-            OriginalStatus     = $originalStatus.ToString()
+        $currentStartMode = Get-ServiceStartMode -Service $svc   # Auto / Manual / Disabled / Boot / System
+        $targetStartMode  = switch ($StartupType) {
+            'Automatic' { 'Auto' }
+            'Manual'    { 'Manual' }
+            'Disabled'  { 'Disabled' }
         }
+
+        # Idempotency, matching Set-RegistryValueSafe: if the service is already
+        # in the desired start mode, change nothing and record nothing, so a
+        # second run of the same profile cannot store the already-tweaked mode
+        # as the "original" (which would corrupt undo).
+        if ($currentStartMode -eq $targetStartMode) {
+            Write-Log -Message "Service '$ServiceName' is already set to $targetStartMode - skipped (no backup record written)" -LogFile $LogFile -Level INFO
+            return $true
+        }
+
+        $originalStatus = $svc.Status
 
         Set-Service -Name $ServiceName -StartupType $StartupType
         if ($StopNow -and $svc.Status -eq 'Running') {
             Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
         }
-        Write-Log -Message "Service '$ServiceName' set to $StartupType" -LogFile $LogFile -Level INFO
+
+        # The backup record is written only after the change actually
+        # succeeded, the same guarantee the registry path gives.
+        Add-BackupRecord -BackupFile $BackupFile -Record @{
+            Type               = 'Service'
+            ServiceName        = $ServiceName
+            OriginalStartMode  = $currentStartMode
+            OriginalStatus     = $originalStatus.ToString()
+        }
+
+        Write-Log -Message "Service '$ServiceName' set to $StartupType (was $currentStartMode)" -LogFile $LogFile -Level INFO
         return $true
     } catch {
         Write-Log -Message "FAILED to change service '$ServiceName' : $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
@@ -423,13 +459,38 @@ function Get-PowerSchemeGuid {
     return $null
 }
 
+# Well-known power-scheme alias GUIDs (locale-independent identifiers for the
+# standard Windows plans), used for idempotency checks.
+$Script:PowerSchemeGuids = @{
+    'SCHEME_BALANCED' = '381b4222-f694-41f0-9685-ff5bb260df2e'
+    'SCHEME_MIN'      = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'   # High Performance
+    'SCHEME_MAX'      = 'a1841308-3541-4fab-bc81-f71556f20b4a'   # Power Saver
+}
+
+function Get-ActivePowerSchemeGuid {
+    # Returns the GUID of the active power scheme, or $null if it cannot be read.
+    try {
+        $raw = (powercfg.exe /getactivescheme) -join ''
+        return Get-PowerSchemeGuid -SchemeOutput $raw
+    } catch {
+        return $null
+    }
+}
+
 function Select-BackupRecordsToRestore {
     <#
         Takes every backup record across all backup files in OLDEST-FIRST order
-        and removes duplicate registry records for the same Path\Name, keeping
-        the earliest one. Without this, a second run of the same profile - which
-        recorded the already-tweaked value as "original" - could override the
-        true pre-toolkit baseline during undo.
+        and removes duplicate records for the same logical target, keeping the
+        earliest one. Without this, a second run of the same profile - which
+        would have recorded the already-tweaked state as "original" - could
+        override the true pre-toolkit baseline during undo.
+
+        De-duplication keys (earliest record per key wins):
+          Registry    -> Path\Name
+          Service     -> ServiceName
+          PowerPlan   -> a single constant key (there is only one active plan)
+          Hibernation -> a single constant key (there is only one hibernation state)
+        Any other record type is never de-duplicated.
     #>
     param([Parameter(Mandatory)][AllowEmptyCollection()][object[]]$Records)
 
@@ -437,10 +498,15 @@ function Select-BackupRecordsToRestore {
     $kept = @()
     foreach ($record in $Records) {
         if ($null -eq $record) { continue }
-        if ((Get-RecordProperty -Record $record -Name 'Type') -eq 'Registry') {
-            $key = '{0}\{1}' -f (Get-RecordProperty -Record $record -Name 'Path'), (Get-RecordProperty -Record $record -Name 'Name')
-            if (-not $seen.Add($key)) { continue }
+        $type = Get-RecordProperty -Record $record -Name 'Type'
+        $key = $null
+        switch ($type) {
+            'Registry'    { $key = 'R|{0}\{1}' -f (Get-RecordProperty -Record $record -Name 'Path'), (Get-RecordProperty -Record $record -Name 'Name') }
+            'Service'     { $key = 'S|{0}' -f (Get-RecordProperty -Record $record -Name 'ServiceName') }
+            'PowerPlan'   { $key = 'P|active' }
+            'Hibernation' { $key = 'H|state' }
         }
+        if ($key -and -not $seen.Add($key)) { continue }
         $kept += $record
     }
     return $kept
@@ -529,6 +595,7 @@ function Get-SystemSnapshot {
 
 function Save-SystemSnapshot {
     param([Parameter(Mandatory)][string]$Label)
+    Ensure-Directory -Path $Script:SnapshotDir
     $snapshot = Get-SystemSnapshot -Label $Label
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $safeLabel = ($Label -replace '[^a-zA-Z0-9_-]', '_')
@@ -545,6 +612,18 @@ function Save-SystemSnapshot {
 # ran the same four tweaks under a different label).
 # ---------------------------------------------------------------------------
 
+# USB selective suspend lives inside the ACTIVE power scheme, under the USB
+# settings subgroup. These GUIDs are the documented Windows identifiers.
+$Script:UsbSubgroupGuid        = '2a737441-1930-4402-8d77-b2bebba308a3'
+$Script:UsbSuspendSettingGuid  = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
+
+function Get-UsbSelectiveSuspendKey {
+    # Builds the registry path of the USB selective-suspend setting for a given
+    # power-scheme GUID, so both the tweak and its verification share one source.
+    param([Parameter(Mandatory)][string]$SchemeGuid)
+    return "HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes\$SchemeGuid\$($Script:UsbSubgroupGuid)\$($Script:UsbSuspendSettingGuid)"
+}
+
 function Invoke-Tweak {
     param(
         [Parameter(Mandatory)][string]$Key,
@@ -556,8 +635,17 @@ function Invoke-Tweak {
 
         'DisableHibernation' {
             # Removes hibernation (frees disk space equal to RAM size); NOT applied to laptop profile.
-            # The backup record is only written if powercfg actually succeeds.
+            # State-aware: if hibernation is already off, nothing is changed and nothing is recorded.
             try {
+                $powerKey  = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'
+                $hiberProp = Get-ItemProperty -Path $powerKey -Name 'HibernateEnabled' -ErrorAction SilentlyContinue
+                $wasEnabled = ($null -ne $hiberProp) -and ([int]$hiberProp.HibernateEnabled -eq 1)
+
+                if (-not $wasEnabled) {
+                    Write-Log -Message 'Hibernation is already disabled (or not enabled) - skipped (no backup record written)' -LogFile $LogFile -Level INFO
+                    return $true
+                }
+
                 Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/hibernate','off'
                 Write-Log -Message 'Hibernation disabled via powercfg (frees disk space equal to RAM size)' -LogFile $LogFile -Level OK
                 Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'Hibernation'; OriginalState = 'enabled' }
@@ -569,12 +657,18 @@ function Invoke-Tweak {
         }
 
         'PowerPlanHighPerformance' {
-            # IMPORTANT: capture the active scheme GUID BEFORE switching -
-            # otherwise we record the new High-Performance GUID, not the user's
-            # original, which makes Undo-All-Changes.ps1 unable to restore it.
+            # Idempotent: if the active plan is already High Performance, nothing
+            # is changed and nothing is recorded. The active GUID is captured
+            # BEFORE switching so undo can restore the user's original plan.
             try {
                 $originalScheme = (powercfg.exe /getactivescheme) -join ''
                 $originalGuid   = Get-PowerSchemeGuid -SchemeOutput $originalScheme
+
+                if ($originalGuid -and $originalGuid -eq $Script:PowerSchemeGuids['SCHEME_MIN']) {
+                    Write-Log -Message 'Active power plan is already High Performance - skipped (no backup record written)' -LogFile $LogFile -Level INFO
+                    return $true
+                }
+
                 Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/setactive','SCHEME_MIN'
                 Write-Log -Message 'Power plan set to High Performance' -LogFile $LogFile -Level OK
                 Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'PowerPlan'; OriginalGuid = $originalGuid; OriginalSchemeRaw = $originalScheme }
@@ -586,10 +680,16 @@ function Invoke-Tweak {
         }
 
         'PowerPlanBalanced' {
-            # Symmetric backup handling with PowerPlanHighPerformance.
+            # Symmetric with PowerPlanHighPerformance, including the idempotency check.
             try {
                 $originalScheme = (powercfg.exe /getactivescheme) -join ''
                 $originalGuid   = Get-PowerSchemeGuid -SchemeOutput $originalScheme
+
+                if ($originalGuid -and $originalGuid -eq $Script:PowerSchemeGuids['SCHEME_BALANCED']) {
+                    Write-Log -Message 'Active power plan is already Balanced - skipped (no backup record written)' -LogFile $LogFile -Level INFO
+                    return $true
+                }
+
                 Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/setactive','SCHEME_BALANCED'
                 Write-Log -Message 'Power plan set to Balanced' -LogFile $LogFile -Level OK
                 Add-BackupRecord -BackupFile $BackupFile -Record @{ Type = 'PowerPlan'; OriginalGuid = $originalGuid; OriginalSchemeRaw = $originalScheme }
@@ -675,8 +775,12 @@ function Invoke-Tweak {
         }
 
         'VisualEffectsBalanced' {
+            # VisualFXSetting: 0 = Let Windows choose (the balanced default),
+            # 1 = best appearance, 2 = best performance, 3 = custom. The
+            # balanced option is 0 - the earlier version wrote 3, which is
+            # actually "Custom" and did not correspond to a balanced preset.
             return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects' `
-                -Name 'VisualFXSetting' -Value 3 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+                -Name 'VisualFXSetting' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
         }
 
         'DisableSysMain' {
@@ -689,8 +793,28 @@ function Invoke-Tweak {
         }
 
         'EnableUSBSelectiveSuspend' {
-            return Set-RegistryValueSafe -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' `
-                -Name 'CsEnabled' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            # USB selective suspend is a per-power-scheme setting, NOT the
+            # CsEnabled (Connected/Modern Standby) flag an earlier version wrote
+            # by mistake. It lives in the active scheme under the USB settings
+            # subgroup; value 1 enables selective suspend for AC and DC.
+            # Writing it through Set-RegistryValueSafe keeps it fully backed up
+            # and reversible; the scheme is re-activated so it takes effect.
+            $schemeGuid = Get-ActivePowerSchemeGuid
+            if (-not $schemeGuid) {
+                Write-Log -Message 'Could not determine the active power scheme - USB selective suspend skipped' -LogFile $LogFile -Level ERROR
+                return $false
+            }
+            $usbKey = Get-UsbSelectiveSuspendKey -SchemeGuid $schemeGuid
+            $okAc = Set-RegistryValueSafe -Path $usbKey -Name 'ACSettingIndex' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            $okDc = Set-RegistryValueSafe -Path $usbKey -Name 'DCSettingIndex' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            if ($okAc -and $okDc) {
+                try {
+                    Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/setactive',$schemeGuid
+                } catch {
+                    Write-Log -Message "USB selective suspend was written but re-activating the power scheme failed: $($_.Exception.Message)" -LogFile $LogFile -Level WARN
+                }
+            }
+            return ($okAc -and $okDc)
         }
 
         'DisableSearchIndexingService' {
@@ -706,28 +830,27 @@ function Invoke-Tweak {
 
 # ---------------------------------------------------------------------------
 # Central verification maps used by Verify-System.ps1.
-# Each registry entry: Path + Name + the value that means "tweak is applied".
+# Each registry entry: Path + Name + Type + the value that means "tweak is applied".
 # Each service entry: ServiceName + the ExpectedStartMode that means "applied".
-# Power-plan & hibernation tweaks are checked separately in Verify-System.ps1
-# via powercfg (not single-value-checkable here).
+# Power-plan, hibernation and USB selective-suspend tweaks are checked
+# separately in Verify-System.ps1 (they need powercfg / the active scheme GUID).
 # These are module-scoped; consumers read them through the Get-Tweak*Map /
 # Get-ProfileDefinition accessors below.
 # ---------------------------------------------------------------------------
 $Script:TweakVerificationMap = @{
-    'EnableHAGS'                              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; ExpectedValue = 2 }
-    'DisableHAGS'                              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; ExpectedValue = 1 }
-    'GamingPriorityBoost'                     = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 38 }
-    'BalancedPrioritySeparation'              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 2 }
-    'ServerPrioritySeparation'                = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; ExpectedValue = 24 }
-    'DisableNetworkThrottling'                = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'NetworkThrottlingIndex'; ExpectedValue = 0xffffffff }
-    'LowerSystemResponsivenessForMultimedia'  = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'SystemResponsiveness'; ExpectedValue = 10 }
-    'DisableStartupDelay'                     = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize'; Name = 'StartupDelayInMSec'; ExpectedValue = 0 }
-    'DisableBackgroundApps'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications'; Name = 'GlobalUserDisabled'; ExpectedValue = 1 }
-    'VisualEffectsBestPerformance'             = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; ExpectedValue = 2 }
-    'VisualEffectsBalanced'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; ExpectedValue = 3 }
-    'DisablePagingExecutive'                  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'; Name = 'DisablePagingExecutive'; ExpectedValue = 1 }
-    'EnableUSBSelectiveSuspend'               = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power'; Name = 'CsEnabled'; ExpectedValue = 1 }
-    'DisableGameDVR'                          = @{ Path = 'HKCU:\System\GameConfigStore'; Name = 'GameDVR_Enabled'; ExpectedValue = 0 }
+    'EnableHAGS'                              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; Type = 'DWord'; ExpectedValue = 2 }
+    'DisableHAGS'                              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'; Name = 'HwSchMode'; Type = 'DWord'; ExpectedValue = 1 }
+    'GamingPriorityBoost'                     = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; Type = 'DWord'; ExpectedValue = 38 }
+    'BalancedPrioritySeparation'              = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; Type = 'DWord'; ExpectedValue = 2 }
+    'ServerPrioritySeparation'                = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\PriorityControl'; Name = 'Win32PrioritySeparation'; Type = 'DWord'; ExpectedValue = 24 }
+    'DisableNetworkThrottling'                = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'NetworkThrottlingIndex'; Type = 'DWord'; ExpectedValue = 0xffffffff }
+    'LowerSystemResponsivenessForMultimedia'  = @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'; Name = 'SystemResponsiveness'; Type = 'DWord'; ExpectedValue = 10 }
+    'DisableStartupDelay'                     = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Serialize'; Name = 'StartupDelayInMSec'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableBackgroundApps'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications'; Name = 'GlobalUserDisabled'; Type = 'DWord'; ExpectedValue = 1 }
+    'VisualEffectsBestPerformance'             = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; Type = 'DWord'; ExpectedValue = 2 }
+    'VisualEffectsBalanced'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisablePagingExecutive'                  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'; Name = 'DisablePagingExecutive'; Type = 'DWord'; ExpectedValue = 1 }
+    'DisableGameDVR'                          = @{ Path = 'HKCU:\System\GameConfigStore'; Name = 'GameDVR_Enabled'; Type = 'DWord'; ExpectedValue = 0 }
 }
 
 # Tweaks that write MULTIPLE registry values (all of them must match for the
@@ -735,8 +858,8 @@ $Script:TweakVerificationMap = @{
 $Script:TweakMultiRegistryMap = @{
     'DisableStartMenuSuggestions' = @{
         Values = @(
-            @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SubscribedContent-338388Enabled'; ExpectedValue = 0 }
-            @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SystemPaneSuggestionsEnabled';    ExpectedValue = 0 }
+            @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SubscribedContent-338388Enabled'; Type = 'DWord'; ExpectedValue = 0 }
+            @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SystemPaneSuggestionsEnabled';    Type = 'DWord'; ExpectedValue = 0 }
         )
     }
 }
@@ -763,6 +886,9 @@ $Script:TweakPowerPlanMap = @{
     'PowerPlanBalanced'        = 'SCHEME_BALANCED'
 }
 
+# Tweaks verified against the active power scheme / powercfg at runtime.
+$Script:TweakRuntimeMap = @('DisableHibernation','EnableUSBSelectiveSuspend')
+
 $Script:ProfileDefinitions = @{
     'Daily-Home' = @('DisableTelemetry','DisableStartupDelay','DisableStartMenuSuggestions','DisableBackgroundApps','VisualEffectsBalanced','PowerPlanBalanced')
     'Gaming'     = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance')
@@ -788,6 +914,7 @@ function Get-TweakMultiRegistryMap { return $Script:TweakMultiRegistryMap }
 function Get-TweakServiceMap       { return $Script:TweakServiceMap }
 function Get-TweakMultiServiceMap  { return $Script:TweakMultiServiceMap }
 function Get-TweakPowerPlanMap     { return $Script:TweakPowerPlanMap }
+function Get-TweakRuntimeMap       { return $Script:TweakRuntimeMap }
 function Get-ProfileDefinition     { return $Script:ProfileDefinitions }
 function Get-ProfileName           { return @($Script:ProfileDefinitions.Keys | Sort-Object) }
 
@@ -854,6 +981,7 @@ function Invoke-OptimizationProfile {
 Export-ModuleMember -Function @(
     'Test-IsAdmin'
     'Assert-Admin'
+    'Ensure-Directory'
     'New-LogFile'
     'Write-Log'
     'New-BackupFile'
@@ -872,6 +1000,8 @@ Export-ModuleMember -Function @(
     'Restore-ServiceBackupRecord'
     'Invoke-NativeCommand'
     'Get-PowerSchemeGuid'
+    'Get-ActivePowerSchemeGuid'
+    'Get-UsbSelectiveSuspendKey'
     'Get-SystemSnapshot'
     'Save-SystemSnapshot'
     'Invoke-Tweak'
@@ -881,6 +1011,7 @@ Export-ModuleMember -Function @(
     'Get-TweakServiceMap'
     'Get-TweakMultiServiceMap'
     'Get-TweakPowerPlanMap'
+    'Get-TweakRuntimeMap'
     'Get-ProfileDefinition'
     'Get-ProfileName'
     'Get-ProfileTweak'
