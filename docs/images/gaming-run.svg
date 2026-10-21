@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="744" height="576" viewBox="0 0 744 576" font-family="'DejaVu Sans Mono','Cascadia Mono',Consolas,monospace" font-size="15">
+<rect width="744" height="576" rx="10" fill="#0c0c0c"/>
+<path d="M0 10a10 10 0 0 1 10-10h724a10 10 0 0 1 10 10v20H0z" fill="#202020"/>
+<circle cx="18" cy="15" r="5" fill="#ff5f56"/>
+<circle cx="36" cy="15" r="5" fill="#ffbd2e"/>
+<circle cx="54" cy="15" r="5" fill="#27c93f"/>
+<text x="372.0" y="19" text-anchor="middle" font-size="11" fill="#8a8a8a">powershell -File Optimize-Gaming.ps1</text>
+<text x="20" y="65" fill="#56c8d8" xml:space="preserve">=== Gaming profile started ===</text>
+<text x="20" y="87" fill="#8a8a8a" xml:space="preserve">Backup file: C:\Users\You\OptimizationLogs\Backups\Gaming_20261021_094205.json</text>
+<text x="20" y="131" fill="#cccccc" xml:space="preserve">Applying tweak: DisableTelemetry</text>
+<text x="20" y="153" fill="#16c60c" xml:space="preserve">Service &#x27;DiagTrack&#x27; set to Manual (was Auto)</text>
+<text x="20" y="175" fill="#cccccc" xml:space="preserve">Applying tweak: EnableHAGS</text>
+<text x="20" y="197" fill="#16c60c" xml:space="preserve">Set HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode = 2</text>
+<text x="20" y="219" fill="#cccccc" xml:space="preserve">Applying tweak: GamingPriorityBoost</text>
+<text x="20" y="241" fill="#16c60c" xml:space="preserve">Set HKLM:\...\PriorityControl\Win32PrioritySeparation = 38</text>
+<text x="20" y="263" fill="#cccccc" xml:space="preserve">Applying tweak: DisableNetworkThrottling</text>
+<text x="20" y="285" fill="#16c60c" xml:space="preserve">Set HKLM:\...\SystemProfile\NetworkThrottlingIndex = 4294967295</text>
+<text x="20" y="307" fill="#cccccc" xml:space="preserve">Applying tweak: DisableGameDVR</text>
+<text x="20" y="329" fill="#16c60c" xml:space="preserve">Set HKCU:\System\GameConfigStore\GameDVR_Enabled = 0</text>
+<text x="20" y="351" fill="#cccccc" xml:space="preserve">Applying tweak: PowerPlanHighPerformance</text>
+<text x="20" y="373" fill="#16c60c" xml:space="preserve">Power plan set to High Performance</text>
+<text x="20" y="395" fill="#cccccc" xml:space="preserve">Applying tweak: VisualEffectsBestPerformance</text>
+<text x="20" y="417" fill="#16c60c" xml:space="preserve">Set HKCU:\...\Explorer\VisualEffects\VisualFXSetting = 2</text>
+<text x="20" y="461" fill="#16c60c" font-weight="bold" xml:space="preserve">=== Gaming profile finished: 7 tweak(s) applied, 0 failed ===</text>
+<text x="20" y="505" fill="#56c8d8" xml:space="preserve">Log file:    C:\Users\You\OptimizationLogs\Gaming_20261021_094205.log</text>
+<text x="20" y="527" fill="#56c8d8" xml:space="preserve">Backup file: C:\Users\You\OptimizationLogs\Backups\Gaming_20261021_094205.json</text>
+<text x="20" y="549" fill="#56c8d8" xml:space="preserve">Run Undo-All-Changes.ps1 at any time to revert every tracked change.</text>
+</svg>
