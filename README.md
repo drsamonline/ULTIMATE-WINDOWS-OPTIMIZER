@@ -2,6 +2,29 @@
 
 # ⚡ Ultimate Windows Optimizer
 
+**Debloat Windows to the metal.** — a PowerShell + batch toolkit for documented, **reversible** Windows 10/11 debloat & performance tweaks.
+
+[![Landing Page](https://img.shields.io/badge/Landing%20Page-Live%20Site-22c55e?style=for-the-badge&labelColor=0a110c)](https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/)
+[![Repository](https://img.shields.io/badge/Repository-GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER)
+[![Download](https://img.shields.io/badge/Download-ZIP-4ade80?style=for-the-badge&labelColor=0a110c)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip)
+
+[![Stars](https://img.shields.io/github/stars/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&logo=github&color=22c55e&labelColor=0a110c)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/stargazers)
+[![Forks](https://img.shields.io/github/forks/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&logo=github&color=22c55e&labelColor=0a110c)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/forks)
+[![License](https://img.shields.io/github/license/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&color=22c55e&labelColor=0a110c)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
+[![Version](https://img.shields.io/badge/version-6.2.0-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
+[![No Telemetry](https://img.shields.io/badge/telemetry-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
+[![No Network](https://img.shields.io/badge/network%20calls-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
+
+**🔗 [Landing page](https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/)** &nbsp;·&nbsp; **📦 [Repository](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER)** &nbsp;·&nbsp; **⬇️ [Download ZIP](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip)**
+
+</div>
+
+---
+
+<div align="center">
+
 **A PowerShell + batch toolkit for applying documented, reversible Windows performance tweaks — organised into profiles for different use cases.**
 
 [![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
