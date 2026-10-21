@@ -240,7 +240,7 @@ the safety guarantees that v6.0 advertises actually hold in practice.
   to 0 with a warning log line in that case.
 - **SSD detection in `Optimize-Extreme.ps1` and `Optimize-Godlike.ps1`
   was fragile.** It compared `Get-PhysicalDisk`.DeviceId (a string that
-  may be `'0'`, `'\\\\\\.\\PHYSICALDRIVE0'`, etc. depending on the storage
+  may be `'0'` or a `\\\\`-style device path, depending on the storage
   stack) with `Get-Partition`.DiskNumber (an integer). Type coercion made
   `'0' -eq 0` true on most systems, but the comparison silently failed
   on storage stacks that return non-numeric DeviceIds. The try/catch
