@@ -4,6 +4,10 @@
     supposed to have applied, and reports Applied / Not Applied / Unknown
     per tweak - it does not assume success.
 
+    Registry values are compared with Test-RegistryValueMatch (the same
+    normalising comparison the write path uses), so a value written as
+    0xffffffff and read back as -1 is correctly reported as Applied.
+
     Usage:
       .\Verify-System.ps1 -ProfileName Gaming
       .\Verify-System.ps1                       -> prompts for a profile name
@@ -41,9 +45,14 @@ $results = @()
 foreach ($tweak in $tweaks) {
     if ($verificationMap.ContainsKey($tweak)) {
         $spec = $verificationMap[$tweak]
+        $type = Get-RecordProperty -Record $spec -Name 'Type' -Default 'DWord'
         try {
             $current = (Get-ItemProperty -Path $spec.Path -Name $spec.Name -ErrorAction Stop).$($spec.Name)
-            $status = if ($current -eq $spec.ExpectedValue) { 'Applied' } else { "Not Applied (current: $current, expected: $($spec.ExpectedValue))" }
+            $status = if (Test-RegistryValueMatch -CurrentValue $current -DesiredValue $spec.ExpectedValue -Type $type) {
+                'Applied'
+            } else {
+                "Not Applied (current: $current, expected: $($spec.ExpectedValue))"
+            }
         } catch {
             $status = 'Not Applied (registry value not found)'
         }
@@ -55,9 +64,10 @@ foreach ($tweak in $tweaks) {
         $spec = $multiRegistryMap[$tweak]
         $problems = @()
         foreach ($valueSpec in $spec.Values) {
+            $type = Get-RecordProperty -Record $valueSpec -Name 'Type' -Default 'DWord'
             try {
                 $current = (Get-ItemProperty -Path $valueSpec.Path -Name $valueSpec.Name -ErrorAction Stop).$($valueSpec.Name)
-                if ($current -ne $valueSpec.ExpectedValue) {
+                if (-not (Test-RegistryValueMatch -CurrentValue $current -DesiredValue $valueSpec.ExpectedValue -Type $type)) {
                     $problems += "$($valueSpec.Name)=$current (expected $($valueSpec.ExpectedValue))"
                 }
             } catch {
@@ -127,6 +137,24 @@ foreach ($tweak in $tweaks) {
             $status = if ($isOff) { 'Applied' } else { 'Not Applied (hibernation still enabled)' }
         } catch {
             $status = 'Unknown (powercfg /a failed)'
+        }
+        $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
+    }
+    elseif ($tweak -eq 'EnableUSBSelectiveSuspend') {
+        # USB selective suspend is stored per active power scheme; both the AC
+        # and DC value must be 1 for the tweak to count as applied.
+        try {
+            $schemeGuid = Get-ActivePowerSchemeGuid
+            if (-not $schemeGuid) {
+                $status = 'Unknown (active power scheme could not be determined)'
+            } else {
+                $usbKey = Get-UsbSelectiveSuspendKey -SchemeGuid $schemeGuid
+                $ac = (Get-ItemProperty -Path $usbKey -Name 'ACSettingIndex' -ErrorAction Stop).ACSettingIndex
+                $dc = (Get-ItemProperty -Path $usbKey -Name 'DCSettingIndex' -ErrorAction Stop).DCSettingIndex
+                $status = if ($ac -eq 1 -and $dc -eq 1) { 'Applied' } else { "Not Applied (AC=$ac, DC=$dc; expected 1/1)" }
+            }
+        } catch {
+            $status = 'Not Applied (USB selective-suspend values not found)'
         }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }

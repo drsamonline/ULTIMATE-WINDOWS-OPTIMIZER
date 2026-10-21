@@ -9,10 +9,11 @@
     then archives them so re-running doesn't reapply the same restores
     endlessly. Use -WhatIf to preview without changing anything.
 
-    Registry records are de-duplicated across all backup files by Path\Name,
-    keeping the OLDEST record for each value: a later run that recorded an
-    already-tweaked value as "original" must never override the true
-    pre-toolkit baseline.
+    Every record type is de-duplicated across all backup files by its logical
+    target (registry Path\Name, service ServiceName, the single active power
+    plan, and the single hibernation state), keeping the OLDEST record for
+    each: a later run that recorded an already-tweaked value as "original"
+    must never override the true pre-toolkit baseline.
 #>
 param(
     [switch]$WhatIf
@@ -77,7 +78,7 @@ foreach ($file in $backupFiles) {
 $recordsToRestore = @(Select-BackupRecordsToRestore -Records $allRecords)
 $skipped = $allRecords.Count - $recordsToRestore.Count
 if ($skipped -gt 0) {
-    Write-Log -Message "Ignoring $skipped duplicate registry record(s) from later runs - the oldest recorded original value wins." -LogFile $logFile -Level INFO
+    Write-Log -Message "Ignoring $skipped duplicate record(s) from later runs - the oldest recorded original value wins." -LogFile $logFile -Level INFO
 }
 
 # --- Pass 3: restore -------------------------------------------------------
@@ -96,8 +97,12 @@ foreach ($record in $recordsToRestore) {
             'Registry' { Restore-RegistryBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
             'Service'  { Restore-ServiceBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
             'Hibernation' {
-                & powercfg.exe /hibernate on
-                Write-Log -Message "Hibernation re-enabled" -LogFile $logFile -Level OK
+                # Restore the state captured at apply time (default 'enabled'
+                # for records written by older versions that did not record it).
+                $origState = [string](Get-RecordProperty -Record $record -Name 'OriginalState' -Default 'enabled')
+                $hiberArg  = if ($origState -eq 'disabled') { 'off' } else { 'on' }
+                Invoke-NativeCommand -ExePath 'powercfg.exe' -Arguments '/hibernate',$hiberArg
+                Write-Log -Message "Hibernation restored to '$origState'" -LogFile $logFile -Level OK
                 $restoredCount++
             }
             'PowerPlan' {

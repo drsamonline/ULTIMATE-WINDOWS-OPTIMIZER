@@ -26,6 +26,20 @@ for ($i = 0; $i -lt $snapshotFiles.Count; $i++) {
 $beforeIndex = Read-Host "`nEnter the number of the BEFORE snapshot"
 $afterIndex  = Read-Host "Enter the number of the AFTER snapshot"
 
+# Validate the selection before indexing: a non-numeric or out-of-range entry
+# must fail loudly here, not silently produce a blank comparison further down.
+$valid = $true
+if ($beforeIndex -notmatch '^\d+$' -or $afterIndex -notmatch '^\d+$') { $valid = $false }
+else {
+    $bi = [int]$beforeIndex
+    $ai = [int]$afterIndex
+    if ($bi -lt 0 -or $bi -ge $snapshotFiles.Count -or $ai -lt 0 -or $ai -ge $snapshotFiles.Count) { $valid = $false }
+}
+if (-not $valid) {
+    Write-Host "Invalid selection - enter a number between 0 and $($snapshotFiles.Count - 1)." -ForegroundColor Red
+    exit 1
+}
+
 try {
     $before = Get-Content $snapshotFiles[[int]$beforeIndex].FullName -Raw | ConvertFrom-Json
     $after  = Get-Content $snapshotFiles[[int]$afterIndex].FullName -Raw | ConvertFrom-Json

@@ -45,7 +45,7 @@ Describe 'Profile catalog' {
                       @((Get-TweakServiceMap).Keys) +
                       @((Get-TweakMultiServiceMap).Keys) +
                       @((Get-TweakPowerPlanMap).Keys) +
-                      @('DisableHibernation')
+                      @('DisableHibernation','EnableUSBSelectiveSuspend')
         foreach ($name in Get-ProfileName) {
             foreach ($tweak in Get-ProfileTweak -ProfileName $name) {
                 $verifiable | Should -Contain $tweak -Because "profile '$name' lists '$tweak'"
@@ -117,13 +117,27 @@ Describe 'Select-BackupRecordsToRestore (oldest original wins)' {
         @(Select-BackupRecordsToRestore -Records $records).Count | Should -Be 1
     }
 
-    It 'never de-duplicates non-registry records' {
+    It 'de-duplicates service records per service, keeping the earliest' {
         $records = @(
             [pscustomobject]@{ Type = 'Service'; ServiceName = 'DiagTrack'; OriginalStartMode = 'Auto' }
             [pscustomobject]@{ Type = 'Service'; ServiceName = 'DiagTrack'; OriginalStartMode = 'Manual' }
-            [pscustomobject]@{ Type = 'PowerPlan'; OriginalGuid = '381b4222-f694-41f0-9685-ff5bb260df2e' }
+            [pscustomobject]@{ Type = 'Service'; ServiceName = 'SysMain';    OriginalStartMode = 'Auto' }
         )
-        @(Select-BackupRecordsToRestore -Records $records).Count | Should -Be 3
+        $kept = @(Select-BackupRecordsToRestore -Records $records)
+        $kept.Count | Should -Be 2
+        @($kept | Where-Object { $_.ServiceName -eq 'DiagTrack' }).OriginalStartMode | Should -Be 'Auto'
+    }
+
+    It 'de-duplicates power-plan and hibernation records, keeping the earliest' {
+        $records = @(
+            [pscustomobject]@{ Type = 'PowerPlan';   OriginalGuid = '381b4222-f694-41f0-9685-ff5bb260df2e' }
+            [pscustomobject]@{ Type = 'PowerPlan';   OriginalGuid = '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' }
+            [pscustomobject]@{ Type = 'Hibernation'; OriginalState = 'enabled' }
+            [pscustomobject]@{ Type = 'Hibernation'; OriginalState = 'disabled' }
+        )
+        $kept = @(Select-BackupRecordsToRestore -Records $records)
+        $kept.Count | Should -Be 2
+        @($kept | Where-Object { $_.Type -eq 'PowerPlan' }).OriginalGuid | Should -Be '381b4222-f694-41f0-9685-ff5bb260df2e'
     }
 
     It 'tolerates an empty record set' {
