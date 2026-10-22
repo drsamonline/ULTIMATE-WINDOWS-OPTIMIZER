@@ -17,7 +17,7 @@
 [![No Telemetry](https://img.shields.io/badge/telemetry-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 [![No Network](https://img.shields.io/badge/network%20calls-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 
-**🔗 [Landing page](https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/)** &nbsp;·&nbsp; **📦 [Repository](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER)** &nbsp;·&nbsp; **⬇️ [Download ZIP](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip)**
+**🔗 [Landing page](https://drsamonline.github.io/ULTIMATE-WINDOWS-OPTIMIZER/)** &nbsp;·&nbsp; **📦 [Repository](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER)** &nbsp;·&nbsp; **⬇️ [Download ZIP](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/archive/refs/heads/main.zip)** &nbsp;·&nbsp; **🧭 [All projects](https://drsamonline.github.io/)**
 
 </div>
 
