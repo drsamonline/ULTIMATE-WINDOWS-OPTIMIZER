@@ -25,16 +25,8 @@
 
 <div align="center">
 
-**A PowerShell + batch toolkit for applying documented, reversible Windows performance tweaks — organised into profiles for different use cases.**
-
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D6.svg)](#requirements)
-[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-5391FE.svg)](#requirements)
-[![Version](https://img.shields.io/badge/version-6.2.0-2ea44f.svg)](CHANGELOG.md)
 [![Tests](https://img.shields.io/badge/tests-Pester%205-4B8BBE.svg)](tests)
 [![CI](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/actions/workflows/ci.yml/badge.svg)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/actions/workflows/ci.yml)
-[![No Telemetry](https://img.shields.io/badge/telemetry-none-brightgreen.svg)](#safety-notes)
-[![No Network](https://img.shields.io/badge/network%20calls-none-brightgreen.svg)](#safety-notes)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](../../pulls)
 
 <img src="docs/images/main-menu.svg" alt="Ultimate Windows Optimizer main menu" width="620">
