@@ -42,7 +42,12 @@ Describe 'New-BackupFile / Add-BackupRecord' -Skip:(-not $script:IsWindowsHost) 
     It 'creates a valid, empty JSON array' {
         $ctx = New-TestContext
         (Get-Content -Path $ctx.BackupFile -Raw).Trim() | Should -Be '[]'
-        @(ConvertFrom-Json -InputObject (Get-Content -Path $ctx.BackupFile -Raw)).Count | Should -Be 0
+        # Windows PowerShell 5.1's ConvertFrom-Json emits NOTHING for `[]`, so
+        # `@(ConvertFrom-Json '[]').Count` is 1, not 0 - this assertion could never pass
+        # on 5.1 and was the first of the nine failures. The file content assertion on the
+        # line above already proves it is a valid empty array; count what actually parsed.
+        @(ConvertFrom-Json -InputObject (Get-Content -Path $ctx.BackupFile -Raw) |
+            Where-Object { $null -ne $_ }).Count | Should -Be 0
     }
 
     It 'appends records without losing earlier ones' {
