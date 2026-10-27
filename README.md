@@ -10,7 +10,7 @@
 
 [![Stars](https://img.shields.io/github/stars/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&logo=github&color=22c55e&labelColor=0a110c)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/stargazers)
 [![Forks](https://img.shields.io/github/forks/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER?style=for-the-badge&logo=github&color=22c55e&labelColor=0a110c)](https://github.com/drsamonline/ULTIMATE-WINDOWS-OPTIMIZER/forks)
-[![License](https://img.shields.io/badge/license-BSD--3--Clause-22c55e?style=for-the-badge&labelColor=0a110c)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge&labelColor=0a110c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
 [![Version](https://img.shields.io/badge/version-6.2.0-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
@@ -236,6 +236,7 @@ both run automatically on `windows-latest` under Windows PowerShell 5.1 in CI
 
 ## License
 
-BSD 3-Clause. See [`LICENSE`](LICENSE).
+MIT. See [`LICENSE`](LICENSE). The copyright notice — © 2026 Dr. Sohil Momin — must be
+retained in every copy or substantial portion of the software: that notice is the
+licence's only condition, and it is why MIT was chosen over a public-domain waiver.
 
-Created by **Dr. Sohil Momin** (Coding For Fun / [@DrSamOnline](https://github.com/DrSamOnline)).
