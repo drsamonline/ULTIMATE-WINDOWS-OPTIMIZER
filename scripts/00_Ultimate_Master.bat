@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Ultimate Windows Optimizer v6.4.0
+title Ultimate Windows Optimizer v6.4.1
 cd /d "%~dp0"
 
 :: --- Admin check -----------------------------------------------------------
@@ -55,7 +55,7 @@ exit /b 1
 :MENU
 cls
 echo =========================================================
-echo   ULTIMATE WINDOWS OPTIMIZER v6.4.0
+echo   ULTIMATE WINDOWS OPTIMIZER v6.4.1
 echo   github.com/DrSamOnline
 echo =========================================================
 echo.

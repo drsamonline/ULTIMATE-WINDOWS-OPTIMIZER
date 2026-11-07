@@ -144,13 +144,16 @@ foreach ($tweak in $tweaks) {
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }
     elseif ($tweak -eq 'DisableHibernation') {
-        # Hibernation is 'applied' (i.e. disabled) when powercfg reports it as off.
+        # Read the same source the write path uses (HibernateEnabled). Parsing
+        # `powercfg /a` text was wrong twice over: the output is localized, so a
+        # non-English Windows always reported "Not Applied", and the old
+        # -split '`n' split on a literal backtick-n rather than a newline.
         try {
-            $hbnOut = (powercfg.exe /a) -join ''
-            $isOff = $hbnOut -match 'Hibernation has been disabled' -or ($hbnOut -split '`n' | Where-Object { $_ -match 'Hibernation' -and $_ -match 'Unavailable' }).Count -gt 0
+            $hiberProp = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Power' -Name 'HibernateEnabled' -ErrorAction Stop
+            $isOff = ([int]$hiberProp.HibernateEnabled -eq 0)
             $status = if ($isOff) { 'Applied' } else { 'Not Applied (hibernation still enabled)' }
         } catch {
-            $status = 'Unknown (powercfg /a failed)'
+            $status = 'Unknown (HibernateEnabled not readable)'
         }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }

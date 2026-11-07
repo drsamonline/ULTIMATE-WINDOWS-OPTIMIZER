@@ -683,9 +683,12 @@ function Get-SystemSnapshot {
     $disk    = Get-CimInstance -ClassName Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'"
     $uptime  = (Get-Date) - $os.LastBootUpTime
 
-    # A short CPU sample (non-blocking, ~1 second)
-    $cpuCounter = Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 1 -MaxSamples 1
-    $cpuLoad = $cpuCounter.CounterSamples[0].CookedValue
+    # Locale-independent CPU sample. Get-Counter's path is localized
+    # ("Prozessor", "Processeur", ...), so it throws on a non-English Windows;
+    # the CIM formatted performance class gives the same kind of value without a
+    # localized path.
+    $cpuSample = Get-CimInstance -ClassName Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'" -ErrorAction SilentlyContinue
+    $cpuLoad = if ($cpuSample) { [double]$cpuSample.PercentProcessorTime } else { 0 }
 
     $totalRamMB = [math]::Round($os.TotalVisibleMemorySize / 1KB, 0)
     $freeRamMB  = [math]::Round($os.FreePhysicalMemory / 1KB, 0)

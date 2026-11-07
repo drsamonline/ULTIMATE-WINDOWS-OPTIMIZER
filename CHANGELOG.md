@@ -1,5 +1,24 @@
 # Changelog
 
+## v6.4.1 - Locale fixes found by audit
+
+Two pre-existing bugs that only show up on a non-English Windows, found in a
+full re-audit of the scripts.
+
+- **`Verify-System.ps1` reported hibernation wrongly on any non-English
+  Windows.** It parsed the localized text of `powercfg /a` looking for
+  "Hibernation has been disabled", so it always said "Not Applied" elsewhere -
+  and the fallback used `-split '` + "`n" + `'`, which splits on a literal
+  backtick-n, not a newline. It now reads `HibernateEnabled` from the registry,
+  the same source the write path already uses for its idempotency check.
+- **`Performance-Monitor.ps1` crashed on a non-English Windows.** It sampled
+  CPU with `Get-Counter '\Processor(_Total)\% Processor Time'`, and counter
+  paths are localized ("Prozessor", "Processeur"). It now reads
+  `Win32_PerfFormattedData_PerfOS_Processor` via CIM, which has no localized
+  path.
+- Docs: the site (`docs/index.html`, `docs/__dbg.html`) now shows the Debloat
+  profile and the permanent debloat instead of only carrying the version bump.
+
 ## v6.4.0 - Explicitly permanent / irreversible debloat
 
 Adds the debloats that genuinely cannot be undone, kept in their own class and
