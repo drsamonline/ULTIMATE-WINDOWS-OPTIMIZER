@@ -1,0 +1,48 @@
+name: diag
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Diagnose backup JSON round-trip
+        shell: powershell
+        run: |
+          Import-Module ./scripts/UWO.psd1 -Force
+          Write-Host "=== is Test-IsBackupRecord exported? ==="
+          Write-Host ("cmd: " + (Get-Command Test-IsBackupRecord -ErrorAction SilentlyContinue))
+
+          $tmp = Join-Path $env:TEMP ("diag-" + [guid]::NewGuid().ToString('N') + ".json")
+          Set-Content -Path $tmp -Value '[]' -Encoding UTF8
+
+          Write-Host "=== empty file parse ==="
+          $p0 = @(ConvertFrom-Json -InputObject (Get-Content -Path $tmp -Raw))
+          Write-Host ("parsed count: " + $p0.Count)
+          foreach ($i in $p0) {
+            Write-Host ("  item type: " + $i.GetType().FullName + " | isRecord=" + (Test-IsBackupRecord $i))
+          }
+
+          Write-Host "=== after one Add-BackupRecord ==="
+          Add-BackupRecord -BackupFile $tmp -Record @{ Type = 'Registry'; Path = 'HKCU:\A'; Name = 'One' }
+          Write-Host ("FILE: >>>" + (Get-Content -Path $tmp -Raw) + "<<<")
+
+          $p1 = @(ConvertFrom-Json -InputObject (Get-Content -Path $tmp -Raw))
+          Write-Host ("parsed count: " + $p1.Count)
+          foreach ($i in $p1) {
+            Write-Host ("  item type: " + $i.GetType().FullName + " | isRecord=" + (Test-IsBackupRecord $i))
+            Write-Host ("  props: " + (($i.PSObject.Properties | ForEach-Object { $_.Name }) -join ','))
+          }
+
+          Write-Host "=== after second Add-BackupRecord ==="
+          Add-BackupRecord -BackupFile $tmp -Record @{ Type = 'Registry'; Path = 'HKCU:\A'; Name = 'Two' }
+          Write-Host ("FILE: >>>" + (Get-Content -Path $tmp -Raw) + "<<<")
+
+          Write-Host "=== ConvertTo-Json shapes ==="
+          $one = @([pscustomobject]@{ Type = 'X'; Name = 'One' })
+          Write-Host ("pipeline   : " + ($one | ConvertTo-Json -Depth 5))
+          Write-Host ("InputObject: " + (ConvertTo-Json -InputObject $one -Depth 5))
