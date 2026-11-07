@@ -29,7 +29,10 @@ BeforeAll {
         param([string]$BackupFile)
         # Uses the module's own parser, so the test sees exactly what the
         # production code sees (including the PowerShell 5.1 array shape).
-        return @(ConvertFrom-BackupJson -Json (Get-Content -Path $BackupFile -Raw))
+        # The leading comma stops PowerShell unrolling a single-record result
+        # into a scalar, which would make `.Count` on it $null.
+        $records = @(ConvertFrom-BackupJson -Json (Get-Content -Path $BackupFile -Raw))
+        return ,$records
     }
 }
 
