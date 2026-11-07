@@ -548,8 +548,9 @@ html.js .reveal.in{opacity:1;transform:none}
 <span class="cy">=========================================================</span>
 <span class="o">  [1] Daily Home    [2] Gaming      [3] Office</span>
 <span class="o">  [4] Laptop        [5] Extreme     [6] Godlike</span>
-<span class="o">  [7] Server        [8] Streaming</span>
+<span class="o">  [7] Server        [8] Streaming   [B] Debloat</span>
 <span class="o">  [9] Compatibility  [M] Snapshot  [U] UNDO ALL</span>
+<span class="r">  [X] PERMANENT debloat - apps / OneDrive / DISM (cannot be undone)</span>
 <span class="c">Select an option:</span> <span class="hl">2</span>
 
 <span class="p">&gt;&gt;</span> <span class="c">Applying profile: Gaming</span>
@@ -591,8 +592,8 @@ html.js .reveal.in{opacity:1;transform:none}
 
       <article class="card reveal">
         <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg></div>
-        <h3>Eight real profiles</h3>
-        <p>Daily Home, Gaming, Office, Laptop, Extreme, Godlike, Server and Streaming — each applies a genuinely different, documented tweak set, read from one source-of-truth catalog.</p>
+        <h3>Nine real profiles</h3>
+        <p>Daily Home, Gaming, Office, Laptop, Extreme, Godlike, Server, Streaming and Debloat — each applies a genuinely different, documented tweak set, read from one source-of-truth catalog.</p>
       </article>
 
       <article class="card reveal">
@@ -639,7 +640,7 @@ html.js .reveal.in{opacity:1;transform:none}
         </li>
         <li class="reveal">
           <h3>Snapshot a baseline, then pick a profile</h3>
-          <p>Option <code>M</code> saves a labeled snapshot — call it <em>Baseline</em>. Then choose the profile (<code>1</code>–<code>8</code>) that matches your machine.</p>
+          <p>Option <code>M</code> saves a labeled snapshot — call it <em>Baseline</em>. Then choose the profile (<code>1</code>–<code>8</code>, or <code>B</code> for Debloat) that matches your machine.</p>
         </li>
         <li class="reveal">
           <h3>Verify, compare, or undo</h3>
@@ -698,10 +699,12 @@ html.js .reveal.in{opacity:1;transform:none}
           <tr><td><span class="k">[6]</span> Godlike</td><td>Everything in Extreme + Windows Search indexing off + Xbox services off</td><td>Requires typing <span class="pill">CONFIRM</span> — trades search speed</td></tr>
           <tr><td><span class="k">[7]</span> Server</td><td>Search indexing &amp; Xbox services off, hibernation removed, background-service CPU priority (opposite of Gaming)</td><td>No GPU / gaming tweaks</td></tr>
           <tr><td><span class="k">[8]</span> Streaming</td><td>Gaming tweaks + <code>SystemResponsiveness</code> lowered so capture/encoding isn't CPU-starved</td><td>—</td></tr>
+          <tr><td><span class="k">[B]</span> Debloat</td><td>Telemetry/CEIP <b>scheduled tasks</b> off, Copilot &amp; Recall off, Bing/web suggestions in Start off, Widgets feed off, activity history + advertising ID + feedback + app-launch tracking off</td><td>Uninstalls nothing — no Appx removal</td></tr>
         </tbody>
       </table>
     </div>
     <p class="hero-note" style="margin-top:14px">&gt; _ the profile catalog in <code>scripts/UWO.psm1</code> is the single source of truth — this table, the verifier and what runs can no longer drift apart.</p>
+    <p class="hero-note" style="margin-top:10px"><span class="r">&gt; _ permanent debloat [X]</span> — Appx removal, OneDrive uninstall and DISM /ResetBase. Deliberately outside every profile: no backup is written and undo cannot revert it.</p>
   </div>
 </section>
 

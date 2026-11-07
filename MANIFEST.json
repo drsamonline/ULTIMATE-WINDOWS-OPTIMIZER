@@ -4,16 +4,16 @@
   "files": {
     "README.md": {
       "sha": "83b27f71d10447f155edf40db333598825fd7340",
-      "producer": "bump@6.4.0",
+      "producer": "agent@site-content-6.4.0",
       "class": "generated",
-      "at": "2026-11-07T16:37:18Z"
+      "at": "2026-11-07T16:47:41Z"
     },
     "docs/index.html": {
-      "sha": "8154529cad7dbaa2c505d5963157db330921824e",
-      "producer": "bump@6.4.0",
+      "sha": "f37ef50f2c6751801e30fcb6b40fce7340b602af",
+      "producer": "agent@site-content-6.4.0",
       "class": "generated",
-      "at": "2026-11-07T16:37:18Z"
+      "at": "2026-11-07T16:47:41Z"
     }
   },
-  "updated": "2026-11-07T16:37:18Z"
+  "updated": "2026-11-07T16:47:41Z"
 }
