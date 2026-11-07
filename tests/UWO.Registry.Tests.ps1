@@ -47,7 +47,7 @@ Describe 'New-BackupFile / Add-BackupRecord' -Skip:(-not $script:IsWindowsHost) 
         # The file is a valid empty array (asserted above) and the record
         # reader sees zero records in it. ConvertFrom-Json's own output shape
         # for '[]' is a PowerShell 5.1 quirk, so assert through the reader.
-        @@(Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
+        @(Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
     }
 
     It 'appends records without losing earlier ones' {
