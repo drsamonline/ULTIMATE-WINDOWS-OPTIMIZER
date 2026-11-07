@@ -1,13 +1,23 @@
 # Changelog
 
-## 1.0.0 — 2026-10-25
+## v6.2.1 - Launcher admin check fixed; version reconciled
 
-- **Licence: PolyForm Noncommercial 1.0.0.** Every repository now carries the canonical text
-  from polyformproject.org with the Required Notice line, and the four places a repo states
-  its licence agree: LICENSE, the SPDX headers, the README and package.json.
-- **The public demo is the app.** A build now fails if `docs/play/index.html` is not the app,
-  because a demo running older code is two code paths for one program.
-
+- **The `.bat` launcher no longer reports "must be run as Administrator" when
+  you already are.** The check used `net session`, which needs not only
+  elevation but also the "Server" (`LanmanServer`) service to be running. On
+  Windows Home and on debloated installs that service is Manual or Disabled, so
+  `net session` fails inside an elevated window. The check now tries `fltmc`
+  first (needs elevation, not the Server service), then `net session`, then an
+  authoritative PowerShell `WindowsPrincipal` check.
+- **The launcher now offers to elevate itself** instead of just failing, and the
+  error message explains the `LanmanServer` cause. Set `UWO_SKIP_ADMIN_CHECK=1`
+  to bypass the check.
+- **Version reconciled to a single source.** `VERSION`, the module manifest, the
+  launcher, `QUICK_START.txt`, the README badge and the site now all read 6.2.1.
+- **Removed a stray `## 1.0.0` changelog entry** that described a different
+  repository (PolyForm licence, `docs/play/index.html`, `package.json`).
+- **Site licence metadata corrected to MIT**, to match `LICENSE` and the README
+  badge (the JSON-LD and the shield said BSD-3-Clause).
 
 ## v6.2.0 - Undo holds for services/power plans, verifier fixes, polish
 
