@@ -204,32 +204,47 @@ function Get-RecordProperty {
     return $prop.Value
 }
 
+function Test-IsBackupRecord {
+    # True only for an actual backup record: a deserialized JSON object that
+    # carries a Type field.
+    #
+    # Windows PowerShell 5.1's ConvertFrom-Json turns an empty JSON array '[]'
+    # into an EMPTY ARRAY OBJECT rather than nothing, and a plain
+    # `$null -ne $_` filter does not remove it. It therefore survived every
+    # read and was re-serialized as a phantom leading entry, which polluted
+    # real backup files and made every registry test count one record too many.
+    # Checking for the Type property drops the empty-array artifact, a bare
+    # $null, and anything else that is not a record, in one place.
+    param($Item)
+    if ($null -eq $Item) { return $false }
+    if ($Item -is [hashtable]) { return $Item.ContainsKey('Type') }
+    return ($null -ne $Item.PSObject.Properties['Type'])
+}
+
 function Add-BackupRecord {
     param(
         [Parameter(Mandatory)][string]$BackupFile,
         [Parameter(Mandatory)][hashtable]$Record
     )
     # Read defensively - an empty or corrupted file should never crash the run.
-    $records = $null
+    $records = @()
     try {
-        $raw = Get-Content -Path $BackupFile -Raw
-        if ([string]::IsNullOrWhiteSpace($raw)) {
-            $records = @()
-        } else {
-            $records = @(ConvertFrom-Json -InputObject $raw)
-            # ConvertFrom-Json returns $null for an empty literal 'null' or
-            # for an empty file coerced through the pipeline. Normalize.
-            if ($null -eq $records) { $records = @() }
-            # Filter out any spurious $null entries from older backup files
-            # that were created before this fix.
-            $records = @($records | Where-Object { $null -ne $_ })
+        if (Test-Path $BackupFile) {
+            $raw = Get-Content -Path $BackupFile -Raw
+            if (-not [string]::IsNullOrWhiteSpace($raw)) {
+                $records = @(ConvertFrom-Json -InputObject $raw | Where-Object { Test-IsBackupRecord $_ })
+            }
         }
     } catch {
         Write-Warning "Backup file '$BackupFile' was unreadable ($($_.Exception.Message)); starting a fresh record list."
         $records = @()
     }
     $records += [pscustomobject]$Record
-    $records | ConvertTo-Json -Depth 5 | Set-Content -Path $BackupFile -Encoding UTF8
+    # -InputObject keeps a one-record file a JSON array ([{...}]) instead of
+    # letting the pipeline unroll it into a bare object ({...}), and guarantees
+    # the file is never written empty.
+    $json = ConvertTo-Json -InputObject @($records) -Depth 5
+    Set-Content -Path $BackupFile -Value $json -Encoding UTF8
 }
 
 # ---------------------------------------------------------------------------
@@ -986,6 +1001,7 @@ Export-ModuleMember -Function @(
     'Write-Log'
     'New-BackupFile'
     'Add-BackupRecord'
+    'Test-IsBackupRecord'
     'Get-RecordProperty'
     'Remove-OldBackupFile'
     'Select-BackupRecordsToRestore'

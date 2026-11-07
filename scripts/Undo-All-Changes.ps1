@@ -62,10 +62,10 @@ foreach ($file in $backupFiles) {
             $parsedFiles += $file
             continue
         }
-        $records = @(ConvertFrom-Json -InputObject $raw)
-        # Filter out any spurious $null entries that could exist in older
-        # backup files written before the Add-BackupRecord null-coercion fix.
-        $allRecords += @($records | Where-Object { $null -ne $_ })
+        # Keep only real records: Windows PowerShell 5.1's ConvertFrom-Json
+        # turns an empty '[]' into an empty-array object, which a plain
+        # `$null -ne $_` check does not filter out.
+        $allRecords += @(ConvertFrom-Json -InputObject $raw | Where-Object { Test-IsBackupRecord $_ })
         $parsedFiles += $file
     } catch {
         Write-Log -Message "Backup file '$($file.Name)' could not be parsed: $($_.Exception.Message) - skipped" -LogFile $logFile -Level ERROR

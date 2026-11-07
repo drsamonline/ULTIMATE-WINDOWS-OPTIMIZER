@@ -14,6 +14,7 @@
         'Write-Log'
         'New-BackupFile'
         'Add-BackupRecord'
+        'Test-IsBackupRecord'
         'Get-RecordProperty'
         'Remove-OldBackupFile'
         'Select-BackupRecordsToRestore'
