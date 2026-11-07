@@ -664,6 +664,11 @@ function Restore-ScheduledTaskBackupRecord {
             Disable-ScheduledTask -TaskPath $Record.TaskPath -TaskName $Record.TaskName -ErrorAction Stop | Out-Null
         } else {
             Enable-ScheduledTask -TaskPath $Record.TaskPath -TaskName $Record.TaskName -ErrorAction Stop | Out-Null
+            # Re-enabling does not restart a task that was mid-run when it was
+            # disabled, so put it back to work as well.
+            if ($Record.OriginalState -eq 'Running') {
+                Start-ScheduledTask -TaskPath $Record.TaskPath -TaskName $Record.TaskName -ErrorAction Stop
+            }
         }
         Write-Log -Message "Restored scheduled task '$($Record.TaskName)' to $($Record.OriginalState)" -LogFile $LogFile -Level OK
     } catch {
@@ -1278,13 +1283,23 @@ function Invoke-IrreversibleOperation {
             foreach ($name in $apps) {
                 $pkg = Get-AppxPackage -Name $name -ErrorAction SilentlyContinue
                 if ($pkg) {
+                    # Prefer removing for every account on the machine; some builds
+                    # reject -AllUsers for certain packages, so fall back to the
+                    # current user rather than leaving the app installed.
+                    $scope = 'all users'
                     try {
-                        Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
-                        Write-PermanentChangeRecord -Operation $Key -Detail "removed installed package $name" -LogFile $LogFile
-                        $removed++
+                        Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop
                     } catch {
-                        Write-Log -Message "Could not remove package '$name': $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                        $scope = 'the current user'
+                        try {
+                            Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+                        } catch {
+                            Write-Log -Message "Could not remove package '$name': $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                            continue
+                        }
                     }
+                    Write-PermanentChangeRecord -Operation $Key -Detail "removed installed package $name (for $scope)" -LogFile $LogFile
+                    $removed++
                 }
                 $prov = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
                     Where-Object { $_.DisplayName -eq $name }

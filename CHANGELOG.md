@@ -1,5 +1,17 @@
 # Changelog
 
+## v6.4.3 - The last three audit findings
+
+- **Scheduled-task restore no longer loses a running task.** Re-enabling a task
+  that was mid-run when it was disabled left it idle until its next trigger.
+  Restore now starts it again when the recorded state was `Running`.
+- **App removal covers every account.** `RemoveBloatApps` removed the package
+  for the current user only, leaving another account's copy installed. It now
+  tries `-AllUsers` first and falls back to the current user on builds that
+  reject it, recording which scope was used in the permanent ledger.
+- **Undo stays quiet when there is nothing to report.** It printed
+  "0 permanent change(s)" whenever the ledger existed but was empty.
+
 ## v6.4.2 - Cleanup declares and records its permanence
 
 Closes the last place where a destructive action hid inside a "reversible"

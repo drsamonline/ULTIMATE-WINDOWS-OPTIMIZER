@@ -160,8 +160,10 @@ if ($WhatIf) {
 $permanentLedger = Join-Path (Get-UwoLogDirectory) 'PermanentChanges.log'
 if (Test-Path $permanentLedger) {
     $permanentCount = @(Get-Content -Path $permanentLedger).Count
-    Write-Host ""
-    Write-Host "NOTE: $permanentCount permanent change(s) are listed in:" -ForegroundColor Red
-    Write-Host "      $permanentLedger" -ForegroundColor Red
-    Write-Host "      Those came from the irreversible debloat and CANNOT be undone." -ForegroundColor Red
+    if ($permanentCount -gt 0) {
+        Write-Host ""
+        Write-Host "NOTE: $permanentCount permanent change(s) are listed in:" -ForegroundColor Red
+        Write-Host "      $permanentLedger" -ForegroundColor Red
+        Write-Host "      Those came from the irreversible debloat and CANNOT be undone." -ForegroundColor Red
+    }
 }
