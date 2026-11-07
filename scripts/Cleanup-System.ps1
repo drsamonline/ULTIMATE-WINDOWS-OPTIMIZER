@@ -2,11 +2,23 @@
     Cleanup-System.ps1
     Cleans user/Windows temp folders and the Recycle Bin, and reports the
     ACTUAL disk space freed (measured before/after), not a canned "5-15GB" claim.
+
+    IRREVERSIBLE: deleting temp files and emptying the Recycle Bin cannot be
+    undone. This is not a tweak and Undo-All-Changes.ps1 does not cover it, so
+    every target it clears is written to the permanent-change ledger
+    (PermanentChanges.log) alongside the irreversible debloat.
 #>
 Import-Module (Join-Path $PSScriptRoot 'UWO.psd1') -Force
 
 Assert-Admin
 $logFile = New-LogFile -Name 'Cleanup'
+
+Write-Host ""
+Write-Host "NOTE: cleanup deletes files permanently. Undo-All-Changes.ps1 does NOT cover it -" -ForegroundColor Yellow
+Write-Host "      deleted temp files and Recycle Bin contents cannot be recovered." -ForegroundColor Yellow
+Write-Host ""
+
+$permanentCount = 0
 
 function Get-FreeSpaceGB {
     (Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$($env:SystemDrive)'").FreeSpace / 1GB
@@ -26,6 +38,8 @@ foreach ($target in $targets) {
     try {
         Remove-Item -Path $target -Recurse -Force -ErrorAction SilentlyContinue
         Write-Log -Message "Cleared: $target" -LogFile $logFile -Level INFO
+        Write-PermanentChangeRecord -Operation 'CleanupSystem' -Detail "cleared $target" -LogFile $logFile
+        $permanentCount++
     } catch {
         Write-Log -Message "Could not fully clear $target : $($_.Exception.Message)" -LogFile $logFile -Level WARN
     }
@@ -34,6 +48,8 @@ foreach ($target in $targets) {
 try {
     Clear-RecycleBin -Force -ErrorAction SilentlyContinue
     Write-Log -Message "Recycle Bin emptied" -LogFile $logFile -Level INFO
+    Write-PermanentChangeRecord -Operation 'CleanupSystem' -Detail 'emptied the Recycle Bin' -LogFile $logFile
+    $permanentCount++
 } catch {
     Write-Log -Message "Recycle Bin could not be emptied: $($_.Exception.Message)" -LogFile $logFile -Level WARN
 }
@@ -62,3 +78,4 @@ if ($clamped) {
     Write-Host "(Measured free space went down during cleanup - something else wrote to the disk, so this is reported as 0 GB.)" -ForegroundColor Yellow
 }
 Write-Host "(Actual results depend entirely on how much temp/cache data existed on this machine.)" -ForegroundColor DarkGray
+Write-Host "Recorded $permanentCount irreversible action(s) in $(Get-PermanentLedgerPath)" -ForegroundColor DarkGray

@@ -83,6 +83,13 @@ Describe 'Irreversible operations' {
         }
     }
 
+    It 'makes Cleanup-System record its deletions as irreversible' {
+        # Cleanup-System.ps1 deletes temp files and empties the Recycle Bin. It is
+        # not a tweak, so the one thing it must do is leave a permanent record.
+        $cleanup = Get-Content -Path (Join-Path (Split-Path -Parent $PSScriptRoot) 'scripts/Cleanup-System.ps1') -Raw
+        $cleanup | Should -Match 'Write-PermanentChangeRecord'
+    }
+
     It 'exposes a permanent-change ledger path under the log root' {
         Get-PermanentLedgerPath | Should -Be (Join-Path (Get-UwoLogDirectory) 'PermanentChanges.log')
     }

@@ -1,5 +1,20 @@
 # Changelog
 
+## v6.4.2 - Cleanup declares and records its permanence
+
+Closes the last place where a destructive action hid inside a "reversible"
+toolkit.
+
+- **`Cleanup-System.ps1` is now explicit about being irreversible.** It prints a
+  warning before touching anything, and every target it clears - the four temp
+  and cache folders plus the Recycle Bin - is appended to
+  `PermanentChanges.log` alongside the irreversible debloat. `Undo-All-Changes.ps1`
+  already reports how many permanent changes are on record, so a cleanup run now
+  shows up there instead of being invisible.
+- **A catalog test fails the build** if the cleanup script ever stops writing to
+  the ledger, so this cannot silently regress.
+- README's permanent section documents the cleanup behaviour.
+
 ## v6.4.1 - Locale fixes found by audit
 
 Two pre-existing bugs that only show up on a non-English Windows, found in a
