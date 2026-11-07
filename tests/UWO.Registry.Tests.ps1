@@ -27,9 +27,9 @@ BeforeAll {
 
     function Get-BackupRecord {
         param([string]$BackupFile)
-        # Mirrors the module's own parsing: only real records count, so the
-        # PowerShell 5.1 empty-array artifact for '[]' cannot inflate a count.
-        return @(ConvertFrom-Json -InputObject (Get-Content -Path $BackupFile -Raw) | Where-Object { Test-IsBackupRecord $_ })
+        # Uses the module's own parser, so the test sees exactly what the
+        # production code sees (including the PowerShell 5.1 array shape).
+        return @(ConvertFrom-BackupJson -Json (Get-Content -Path $BackupFile -Raw))
     }
 }
 

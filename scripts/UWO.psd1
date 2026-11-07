@@ -15,6 +15,7 @@
         'New-BackupFile'
         'Add-BackupRecord'
         'Test-IsBackupRecord'
+        'ConvertFrom-BackupJson'
         'Get-RecordProperty'
         'Remove-OldBackupFile'
         'Select-BackupRecordsToRestore'

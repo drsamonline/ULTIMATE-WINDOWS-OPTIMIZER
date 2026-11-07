@@ -221,6 +221,34 @@ function Test-IsBackupRecord {
     return ($null -ne $Item.PSObject.Properties['Type'])
 }
 
+function ConvertFrom-BackupJson {
+    # Converts the text of a backup file into a flat list of record objects.
+    #
+    # Windows PowerShell 5.1's ConvertFrom-Json writes a JSON array to the
+    # pipeline as a SINGLE object (the array itself) rather than enumerating
+    # it. So `@(ConvertFrom-Json '[{...}]')` yields one element that is an
+    # Object[] - not the record - and `[]` yields one element that is an empty
+    # Object[]. Flattening one level here is what makes the records usable, and
+    # is why a naive `$null -ne $_` filter never worked.
+    param([AllowNull()][AllowEmptyString()][string]$Json)
+
+    $out = @()
+    if ([string]::IsNullOrWhiteSpace($Json)) { return $out }
+
+    $parsed = ConvertFrom-Json -InputObject $Json
+    if ($null -eq $parsed) { return $out }
+
+    if ($parsed -is [System.Array]) { $items = $parsed } else { $items = @($parsed) }
+    foreach ($item in $items) {
+        if ($item -is [System.Array]) {
+            foreach ($inner in $item) { if (Test-IsBackupRecord $inner) { $out += $inner } }
+        } elseif (Test-IsBackupRecord $item) {
+            $out += $item
+        }
+    }
+    return $out
+}
+
 function Add-BackupRecord {
     param(
         [Parameter(Mandatory)][string]$BackupFile,
@@ -231,9 +259,7 @@ function Add-BackupRecord {
     try {
         if (Test-Path $BackupFile) {
             $raw = Get-Content -Path $BackupFile -Raw
-            if (-not [string]::IsNullOrWhiteSpace($raw)) {
-                $records = @(ConvertFrom-Json -InputObject $raw | Where-Object { Test-IsBackupRecord $_ })
-            }
+            $records = @(ConvertFrom-BackupJson -Json $raw)
         }
     } catch {
         Write-Warning "Backup file '$BackupFile' was unreadable ($($_.Exception.Message)); starting a fresh record list."
@@ -1002,6 +1028,7 @@ Export-ModuleMember -Function @(
     'New-BackupFile'
     'Add-BackupRecord'
     'Test-IsBackupRecord'
+    'ConvertFrom-BackupJson'
     'Get-RecordProperty'
     'Remove-OldBackupFile'
     'Select-BackupRecordsToRestore'

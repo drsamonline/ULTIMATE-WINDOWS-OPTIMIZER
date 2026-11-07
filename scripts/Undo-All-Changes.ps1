@@ -62,10 +62,9 @@ foreach ($file in $backupFiles) {
             $parsedFiles += $file
             continue
         }
-        # Keep only real records: Windows PowerShell 5.1's ConvertFrom-Json
-        # turns an empty '[]' into an empty-array object, which a plain
-        # `$null -ne $_` check does not filter out.
-        $allRecords += @(ConvertFrom-Json -InputObject $raw | Where-Object { Test-IsBackupRecord $_ })
+        # ConvertFrom-BackupJson flattens the array shape Windows PowerShell
+        # 5.1's ConvertFrom-Json returns and drops non-record artifacts.
+        $allRecords += @(ConvertFrom-BackupJson -Json $raw)
         $parsedFiles += $file
     } catch {
         Write-Log -Message "Backup file '$($file.Name)' could not be parsed: $($_.Exception.Message) - skipped" -LogFile $logFile -Level ERROR
