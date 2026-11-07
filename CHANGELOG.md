@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: a phantom empty-array record corrupted every backup file.**
+  Windows PowerShell 5.1's `ConvertFrom-Json` writes a JSON array to the
+  pipeline as a *single object* (the array itself) instead of enumerating it,
+  and turns `[]` into an empty `Object[]`. So `@(ConvertFrom-Json '[{...}]')`
+  yielded one element that was an `Object[]`, not the record, and a naive
+  `$null -ne $_` filter never removed the empty-array artifact. `Add-BackupRecord`
+  therefore re-serialised a leading phantom entry on every read, inflating
+  record counts by one and making `$records[0]` null. New
+  `ConvertFrom-BackupJson` parses and flattens one level, and
+  `Add-BackupRecord` serialises with `-InputObject` so a one-record file stays a
+  JSON array and is never written empty. `Undo-All-Changes.ps1` reads through
+  the same parser. This is what had been failing 9 of the 40 tests in CI since
+  the suite was added; the suite is now 40/40 green.
+- **Test fix:** record-count assertions are wrapped in `@()` so an empty
+  result counts as 0 and a single record does not unroll to a scalar.
+
 ## v6.2.1 - Launcher admin check fixed; version reconciled
 
 - **The `.bat` launcher no longer reports "must be run as Administrator" when
