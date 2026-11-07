@@ -1,5 +1,29 @@
 # Changelog
 
+## v6.4.0 - Explicitly permanent / irreversible debloat
+
+Adds the debloats that genuinely cannot be undone, kept in their own class and
+labelled as such everywhere - instead of quietly pretending they are reversible.
+
+- **New irreversible operations**, exposed by `Invoke-IrreversibleOperation`
+  and driven by `scripts/Permanent-Debloat.ps1` (launcher option `X`):
+  - `RemoveBloatApps` - uninstall a fixed list of consumer Appx packages, both
+    installed and provisioned.
+  - `RemoveOneDrive` - run the OneDrive uninstaller.
+  - `ResetComponentStore` - `DISM /StartComponentCleanup /ResetBase`, after which
+    installed updates can no longer be uninstalled.
+- **Kept out of the reversible machinery by construction.** They are not tweaks,
+  not in any profile, write no backup record, and `Undo-All-Changes.ps1` never
+  replays them. A catalog test fails the build if an irreversible operation ever
+  appears in a profile.
+- **Says so, loudly.** Each operation carries an explicit `PERMANENT:` warning
+  shown before and during the run; the script requires typing `I UNDERSTAND`;
+  and every action is appended to an append-only ledger at
+  `%USERPROFILE%\OptimizationLogs\PermanentChanges.log`.
+- **Undo now tells you.** At the end of a restore run it reports how many
+  permanent changes are recorded and that they cannot be undone.
+- Version 6.4.0.
+
 ## v6.3.0 - Debloat profile and reversible scheduled-task support
 
 Feature release. Closes the biggest capability gap against the other Windows

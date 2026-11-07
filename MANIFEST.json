@@ -3,17 +3,17 @@
   "locked": false,
   "files": {
     "README.md": {
-      "sha": "008dc712ec8c5c81d64d5981acd927cc80cfae68",
-      "producer": "bump@6.3.0",
+      "sha": "83b27f71d10447f155edf40db333598825fd7340",
+      "producer": "bump@6.4.0",
       "class": "generated",
-      "at": "2026-11-07T15:37:58Z"
+      "at": "2026-11-07T16:37:18Z"
     },
     "docs/index.html": {
-      "sha": "1e040e738d6c356f7fbcd99b38c67419eb1d635b",
-      "producer": "bump@6.3.0",
+      "sha": "8154529cad7dbaa2c505d5963157db330921824e",
+      "producer": "bump@6.4.0",
       "class": "generated",
-      "at": "2026-11-07T15:37:58Z"
+      "at": "2026-11-07T16:37:18Z"
     }
   },
-  "updated": "2026-11-07T15:37:58Z"
+  "updated": "2026-11-07T16:37:18Z"
 }

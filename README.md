@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge&labelColor=0a110c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
-[![Version](https://img.shields.io/badge/version-6.3.0-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.4.0-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
 [![No Telemetry](https://img.shields.io/badge/telemetry-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 [![No Network](https://img.shields.io/badge/network%20calls-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 
@@ -66,6 +66,7 @@ measure your own real before/after numbers with `Compare-Results.ps1`.
 - [Utilities](#utilities)
 - [What's new in v6.3.0](#whats-new-in-v630)
 - [What's new in v6.2.0](#whats-new-in-v620)
+- [Permanent / irreversible debloat](#permanent--irreversible-debloat-cannot-be-undone)
 - [Safety notes](#safety-notes)
 - [Development](#development)
 - [License](#license)
@@ -214,6 +215,32 @@ registry values.
 See [`CHANGELOG.md`](CHANGELOG.md) for the full history.
 
 ---
+
+## Permanent / irreversible debloat (cannot be undone)
+
+Everything else in this toolkit is reversible by design. This is the one part
+that is not, and it is kept deliberately separate.
+
+`scripts\Permanent-Debloat.ps1` (launcher option `X`) runs debloat actions that
+**cannot be undone by this toolkit**:
+
+| Operation | What it does | Why it cannot be undone |
+|---|---|---|
+| Remove consumer Appx packages | Uninstalls a fixed list of built-in apps, installed and provisioned | Removed packages must be reinstalled from the Microsoft Store |
+| Uninstall the OneDrive client | Runs the OneDrive uninstaller | OneDrive must be reinstalled from Microsoft |
+| Compact the component store | `DISM /StartComponentCleanup /ResetBase` | Updates already installed can no longer be uninstalled |
+
+How it is kept honest:
+
+- **No backup record is written.** These are not tweaks - they never enter the
+  catalog and never appear in any profile.
+- **`Undo-All-Changes.ps1` does not touch them**, and prints a warning at the end
+  telling you how many permanent changes are recorded.
+- **Typing `I UNDERSTAND` is required** before anything runs.
+- Every action is appended to an append-only ledger at
+  `%USERPROFILE%\OptimizationLogs\PermanentChanges.log`, so you can see what was
+  done even though you cannot put it back.
+- CI enforces that no irreversible operation is ever part of a normal profile.
 
 ## Safety notes
 

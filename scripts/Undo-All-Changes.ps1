@@ -154,3 +154,14 @@ if ($WhatIf) {
     Write-Host "Processed backup files were moved to: $archiveDir" -ForegroundColor Cyan
     Write-Host "A restart is recommended so all services/registry changes take full effect." -ForegroundColor Yellow
 }
+
+# Permanent changes are recorded in a separate, append-only ledger and are NOT
+# replayed here. Say so out loud so nobody assumes this script is a full reset.
+$permanentLedger = Join-Path (Get-UwoLogDirectory) 'PermanentChanges.log'
+if (Test-Path $permanentLedger) {
+    $permanentCount = @(Get-Content -Path $permanentLedger).Count
+    Write-Host ""
+    Write-Host "NOTE: $permanentCount permanent change(s) are listed in:" -ForegroundColor Red
+    Write-Host "      $permanentLedger" -ForegroundColor Red
+    Write-Host "      Those came from the irreversible debloat and CANNOT be undone." -ForegroundColor Red
+}

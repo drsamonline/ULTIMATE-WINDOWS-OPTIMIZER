@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Ultimate Windows Optimizer v6.3.0
+title Ultimate Windows Optimizer v6.4.0
 cd /d "%~dp0"
 
 :: --- Admin check -----------------------------------------------------------
@@ -55,7 +55,7 @@ exit /b 1
 :MENU
 cls
 echo =========================================================
-echo   ULTIMATE WINDOWS OPTIMIZER v6.3.0
+echo   ULTIMATE WINDOWS OPTIMIZER v6.4.0
 echo   github.com/DrSamOnline
 echo =========================================================
 echo.
@@ -81,6 +81,8 @@ echo   [S]  Create System Restore Point / Open System Restore
 echo   [U]  UNDO ALL TRACKED CHANGES
 echo   [P]  Prune Old Backup Files (keeps last 20 / 30 days)
 echo   [D]  Download Optional Diagnostic Tools (HWiNFO64, GPU-Z)
+echo.
+echo   [X]  PERMANENT DEBLOAT   - apps / OneDrive / DISM (CANNOT BE UNDONE)
 echo.
 echo   [Q] Quit
 echo.
@@ -166,6 +168,10 @@ if /i "%choice%"=="P" (
 )
 if /i "%choice%"=="D" (
     call "01_Auto_Dependency_Downloader.bat"
+    goto PAUSE_MENU
+)
+if /i "%choice%"=="X" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "Permanent-Debloat.ps1"
     goto PAUSE_MENU
 )
 if /i "%choice%"=="Q" goto END

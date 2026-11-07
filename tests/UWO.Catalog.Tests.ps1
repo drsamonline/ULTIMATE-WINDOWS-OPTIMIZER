@@ -64,6 +64,30 @@ Describe 'Profile catalog' {
     }
 }
 
+Describe 'Irreversible operations' {
+    It 'are declared with a title and an explicit permanence warning' {
+        $ops = Get-IrreversibleOperation
+        @($ops.Keys).Count | Should -BeGreaterThan 0
+        foreach ($name in @($ops.Keys)) {
+            $ops[$name].Title   | Should -Not -BeNullOrEmpty
+            $ops[$name].Warning | Should -Match 'PERMANENT'
+            $ops[$name].Warning | Should -Match 'cannot|no longer'
+        }
+    }
+
+    It 'are never part of a normal profile, so undo never touches them' {
+        $profileTweaks = @()
+        foreach ($p in Get-ProfileName) { $profileTweaks += @(Get-ProfileTweak -ProfileName $p) }
+        foreach ($name in Get-IrreversibleName) {
+            $profileTweaks | Should -Not -Contain $name
+        }
+    }
+
+    It 'exposes a permanent-change ledger path under the log root' {
+        Get-PermanentLedgerPath | Should -Be (Join-Path (Get-UwoLogDirectory) 'PermanentChanges.log')
+    }
+}
+
 Describe 'Get-PowerSchemeGuid' {
     It 'extracts the GUID from English powercfg output' {
         Get-PowerSchemeGuid -SchemeOutput 'Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)' |

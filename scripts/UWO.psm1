@@ -1183,6 +1183,167 @@ function Invoke-OptimizationProfile {
 }
 
 # ---------------------------------------------------------------------------
+# PERMANENT / IRREVERSIBLE OPERATIONS
+#
+# These are the debloats that genuinely cannot be undone: uninstalling apps,
+# removing a component, resetting the component store. They are deliberately
+# kept OUT of the tweak catalog and OUT of every profile, they write NO backup
+# record, and Undo-All-Changes.ps1 never touches them. Each one is announced as
+# permanent in the log and appended to an append-only ledger so the user can at
+# least see what was done, even though it cannot be put back.
+# ---------------------------------------------------------------------------
+
+$Script:PermanentLedgerName = 'PermanentChanges.log'
+
+$Script:IrreversibleOperations = [ordered]@{
+    'RemoveBloatApps' = @{
+        Title   = 'Uninstall consumer Appx packages'
+        Warning = 'PERMANENT: removed apps cannot be restored by this toolkit - reinstall them from the Microsoft Store.'
+    }
+    'RemoveOneDrive' = @{
+        Title   = 'Uninstall the OneDrive client'
+        Warning = 'PERMANENT: OneDrive cannot be restored by this toolkit - reinstall it from Microsoft.'
+    }
+    'ResetComponentStore' = @{
+        Title   = 'Compact the component store (DISM /ResetBase)'
+        Warning = 'PERMANENT: updates already installed can no longer be uninstalled afterwards.'
+    }
+}
+
+function Get-IrreversibleOperation { return $Script:IrreversibleOperations }
+function Get-IrreversibleName      { return @($Script:IrreversibleOperations.Keys) }
+
+function Get-PermanentLedgerPath {
+    return (Join-Path $Script:RootLogDir $Script:PermanentLedgerName)
+}
+
+function Write-PermanentChangeRecord {
+    # Append-only record of a change that CANNOT be undone. This is not a
+    # backup: nothing here is ever replayed by Undo-All-Changes.ps1.
+    param(
+        [Parameter(Mandatory)][string]$Operation,
+        [Parameter(Mandatory)][string]$Detail,
+        [Parameter(Mandatory)][string]$LogFile
+    )
+    Ensure-Directory -Path $Script:RootLogDir
+    $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [PERMANENT] $Operation - $Detail"
+    Add-Content -Path (Get-PermanentLedgerPath) -Value $line
+    Add-Content -Path $LogFile -Value $line
+}
+
+function Invoke-IrreversibleOperation {
+    <#
+        Runs one permanent debloat operation. There is no backup record and no
+        rollback by design; the only trace is the permanent-change ledger.
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Key,
+        [Parameter(Mandatory)][string]$LogFile
+    )
+
+    if (-not $Script:IrreversibleOperations.ContainsKey($Key)) {
+        Write-Log -Message "Unknown irreversible operation '$Key' - skipped" -LogFile $LogFile -Level WARN
+        return $false
+    }
+
+    $op = $Script:IrreversibleOperations[$Key]
+    Write-Log -Message "=== PERMANENT CHANGE: $($op.Title) ===" -LogFile $LogFile -Level WARN
+    Write-Log -Message "    $($op.Warning)" -LogFile $LogFile -Level WARN
+    Write-Log -Message '    No backup record is written. Undo-All-Changes.ps1 cannot revert this.' -LogFile $LogFile -Level WARN
+
+    switch ($Key) {
+
+        'RemoveBloatApps' {
+            $apps = @(
+                'Microsoft.BingNews'
+                'Microsoft.BingWeather'
+                'Microsoft.GetHelp'
+                'Microsoft.Getstarted'
+                'Microsoft.MicrosoftSolitaireCollection'
+                'Microsoft.People'
+                'Microsoft.WindowsFeedbackHub'
+                'Microsoft.ZuneMusic'
+                'Microsoft.ZuneVideo'
+                'Microsoft.MicrosoftOfficeHub'
+                'Microsoft.SkypeApp'
+                'Microsoft.YourPhone'
+                'Microsoft.Todos'
+                'Microsoft.PowerAutomateDesktop'
+                'Clipchamp.Clipchamp'
+            )
+            $removed = 0
+            foreach ($name in $apps) {
+                $pkg = Get-AppxPackage -Name $name -ErrorAction SilentlyContinue
+                if ($pkg) {
+                    try {
+                        Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+                        Write-PermanentChangeRecord -Operation $Key -Detail "removed installed package $name" -LogFile $LogFile
+                        $removed++
+                    } catch {
+                        Write-Log -Message "Could not remove package '$name': $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                    }
+                }
+                $prov = Get-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue |
+                    Where-Object { $_.DisplayName -eq $name }
+                if ($prov) {
+                    try {
+                        Remove-AppxProvisionedPackage -Online -PackageName $prov.PackageName -ErrorAction Stop | Out-Null
+                        Write-PermanentChangeRecord -Operation $Key -Detail "removed provisioned package $name" -LogFile $LogFile
+                        $removed++
+                    } catch {
+                        Write-Log -Message "Could not remove provisioned package '$name': $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                    }
+                }
+            }
+            Write-Log -Message "Appx removal finished: $removed item(s) removed (permanent)" -LogFile $LogFile -Level WARN
+            return $true
+        }
+
+        'RemoveOneDrive' {
+            Get-Process -Name 'OneDrive' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            $ran = $false
+            foreach ($exe in @(
+                (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe'),
+                (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe')
+            )) {
+                if (Test-Path $exe) {
+                    try {
+                        Start-Process -FilePath $exe -ArgumentList '/uninstall' -Wait -NoNewWindow -ErrorAction Stop
+                        Write-PermanentChangeRecord -Operation $Key -Detail "ran '$exe /uninstall'" -LogFile $LogFile
+                        $ran = $true
+                    } catch {
+                        Write-Log -Message "OneDrive uninstall failed via '$exe': $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                    }
+                }
+            }
+            if (-not $ran) {
+                Write-Log -Message 'OneDrive uninstaller was not found - nothing changed' -LogFile $LogFile -Level WARN
+            }
+            return $ran
+        }
+
+        'ResetComponentStore' {
+            try {
+                $dism = Join-Path $env:SystemRoot 'System32\Dism.exe'
+                Write-Log -Message 'Running DISM StartComponentCleanup /ResetBase - this can take several minutes...' -LogFile $LogFile -Level INFO
+                & $dism /Online /Cleanup-Image /StartComponentCleanup /ResetBase | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Log -Message "DISM exited with code $LASTEXITCODE" -LogFile $LogFile -Level ERROR
+                    return $false
+                }
+                Write-PermanentChangeRecord -Operation $Key -Detail 'DISM StartComponentCleanup /ResetBase completed' -LogFile $LogFile
+                return $true
+            } catch {
+                Write-Log -Message "DISM failed: $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+                return $false
+            }
+        }
+    }
+
+    return $false
+}
+
+# ---------------------------------------------------------------------------
 # Public surface
 # ---------------------------------------------------------------------------
 
@@ -1224,6 +1385,11 @@ Export-ModuleMember -Function @(
     'Get-TweakMultiServiceMap'
     'Get-TweakPowerPlanMap'
     'Get-TweakTaskMap'
+    'Get-IrreversibleOperation'
+    'Get-IrreversibleName'
+    'Get-PermanentLedgerPath'
+    'Write-PermanentChangeRecord'
+    'Invoke-IrreversibleOperation'
     'Get-TweakRuntimeMap'
     'Get-ProfileDefinition'
     'Get-ProfileName'

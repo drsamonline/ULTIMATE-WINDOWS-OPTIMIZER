@@ -1,4 +1,4 @@
-ULTIMATE WINDOWS OPTIMIZER v6.3.0 - QUICK START
+ULTIMATE WINDOWS OPTIMIZER v6.4.0 - QUICK START
 ================================================
 
 1. Extract the ZIP anywhere on your PC.
@@ -21,6 +21,7 @@ ULTIMATE WINDOWS OPTIMIZER v6.3.0 - QUICK START
       [7] Server       - headless/background-service machines
       [8] Streaming    - gaming + OBS/streaming software together
       [B] Debloat      - privacy + telemetry tasks (reversible)
+      [X] PERMANENT    - apps / OneDrive / DISM (CANNOT be undone)
 
 5. (Optional) Take another snapshot [M], label it something like
    "AfterGaming", then choose [R] to see the real, measured before/after
