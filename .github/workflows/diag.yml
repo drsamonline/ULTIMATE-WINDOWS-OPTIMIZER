@@ -1,0 +1,48 @@
+name: diag
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce the failing Set-RegistryValueSafe path
+        shell: powershell
+        run: |
+          $root = Join-Path $env:TEMP ("uwo-diag-" + [guid]::NewGuid().ToString('N'))
+          New-Item -Path $root -ItemType Directory -Force | Out-Null
+          $env:UWO_LOG_ROOT = $root
+          Import-Module ./scripts/UWO.psd1 -Force
+
+          $key = 'HKCU:\Software\UWO-Diag'
+          if (Test-Path $key) { Remove-Item $key -Recurse -Force }
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'Existing' -Value 1 -PropertyType DWord -Force | Out-Null
+
+          $log = New-LogFile -Name 'Diag'
+          $bak = New-BackupFile -Name 'Diag'
+          Write-Host "bak=$bak"
+          Write-Host ("before: >>>" + (Get-Content -Path $bak -Raw) + "<<<")
+
+          $r = Set-RegistryValueSafe -Path $key -Name 'Existing' -Value 5 -Type DWord -LogFile $log -BackupFile $bak
+          Write-Host "Set-RegistryValueSafe returned: $r"
+          Write-Host ("value now: " + (Get-ItemProperty -Path $key -Name 'Existing').Existing)
+          Write-Host ("after: >>>" + (Get-Content -Path $bak -Raw) + "<<<")
+
+          $recs = @(ConvertFrom-BackupJson -Json (Get-Content -Path $bak -Raw))
+          Write-Host ("records: " + $recs.Count)
+
+          Write-Host "=== log file ==="
+          Get-Content -Path $log
+
+          Write-Host "=== direct Add-BackupRecord into a fresh file ==="
+          $bak2 = New-BackupFile -Name 'Diag2'
+          Add-BackupRecord -BackupFile $bak2 -Record @{ Type = 'Registry'; Path = 'HKCU:\A'; Name = 'X'; Existed = $true; OriginalValue = 1 }
+          Write-Host ("after2: >>>" + (Get-Content -Path $bak2 -Raw) + "<<<")
+          Write-Host ("records2: " + @(ConvertFrom-BackupJson -Json (Get-Content -Path $bak2 -Raw)).Count)
+
+          Remove-Item $key -Recurse -Force -ErrorAction SilentlyContinue
