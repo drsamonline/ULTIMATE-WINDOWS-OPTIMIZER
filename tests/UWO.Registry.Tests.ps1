@@ -29,10 +29,7 @@ BeforeAll {
         param([string]$BackupFile)
         # Uses the module's own parser, so the test sees exactly what the
         # production code sees (including the PowerShell 5.1 array shape).
-        # The leading comma stops PowerShell unrolling a single-record result
-        # into a scalar, which would make `.Count` on it $null.
-        $records = @(ConvertFrom-BackupJson -Json (Get-Content -Path $BackupFile -Raw))
-        return ,$records
+        return @(ConvertFrom-BackupJson -Json (Get-Content -Path $BackupFile -Raw))
     }
 }
 
@@ -50,14 +47,14 @@ Describe 'New-BackupFile / Add-BackupRecord' -Skip:(-not $script:IsWindowsHost) 
         # The file is a valid empty array (asserted above) and the record
         # reader sees zero records in it. ConvertFrom-Json's own output shape
         # for '[]' is a PowerShell 5.1 quirk, so assert through the reader.
-        @(Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
+        @@(Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
     }
 
     It 'appends records without losing earlier ones' {
         $ctx = New-TestContext
         Add-BackupRecord -BackupFile $ctx.BackupFile -Record @{ Type = 'Registry'; Path = 'HKCU:\A'; Name = 'One' }
         Add-BackupRecord -BackupFile $ctx.BackupFile -Record @{ Type = 'Registry'; Path = 'HKCU:\A'; Name = 'Two' }
-        $records = Get-BackupRecord -BackupFile $ctx.BackupFile
+        $records = @(Get-BackupRecord -BackupFile $ctx.BackupFile)
         $records.Count | Should -Be 2
         @($records.Name) | Should -Be @('One','Two')
     }
@@ -72,7 +69,7 @@ Describe 'Set-RegistryValueSafe' -Skip:(-not $script:IsWindowsHost) {
             Should -BeTrue
 
         (Get-ItemProperty -Path $script:TestRoot -Name 'Existing').Existing | Should -Be 5
-        $records = Get-BackupRecord -BackupFile $ctx.BackupFile
+        $records = @(Get-BackupRecord -BackupFile $ctx.BackupFile)
         $records.Count | Should -Be 1
         $records[0].Existed | Should -BeTrue
         $records[0].OriginalValue | Should -Be 1
@@ -86,7 +83,7 @@ Describe 'Set-RegistryValueSafe' -Skip:(-not $script:IsWindowsHost) {
         Set-RegistryValueSafe -Path $script:TestRoot -Name 'Nope' -Value 1 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile |
             Should -BeFalse
 
-        (Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
+        @(Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
     }
 
     It 'removes a key it created when the write fails' {
@@ -98,7 +95,7 @@ Describe 'Set-RegistryValueSafe' -Skip:(-not $script:IsWindowsHost) {
             Should -BeFalse
 
         Test-Path $newKey | Should -BeFalse
-        (Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
+        @(Get-BackupRecord -BackupFile $ctx.BackupFile).Count | Should -Be 0
     }
 
     It 'records KeyCreated when it had to create the key' {
@@ -108,7 +105,7 @@ Describe 'Set-RegistryValueSafe' -Skip:(-not $script:IsWindowsHost) {
         Set-RegistryValueSafe -Path $newKey -Name 'Value' -Value 1 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile |
             Should -BeTrue
 
-        $records = Get-BackupRecord -BackupFile $ctx.BackupFile
+        $records = @(Get-BackupRecord -BackupFile $ctx.BackupFile)
         $records[0].KeyCreated | Should -BeTrue
         $records[0].Existed | Should -BeFalse
     }
@@ -118,7 +115,7 @@ Describe 'Set-RegistryValueSafe' -Skip:(-not $script:IsWindowsHost) {
         Set-RegistryValueSafe -Path $script:TestRoot -Name 'Idem' -Value 7 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile | Should -BeTrue
         Set-RegistryValueSafe -Path $script:TestRoot -Name 'Idem' -Value 7 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile | Should -BeTrue
 
-        $records = Get-BackupRecord -BackupFile $ctx.BackupFile
+        $records = @(Get-BackupRecord -BackupFile $ctx.BackupFile)
         $records.Count | Should -Be 1
         $records[0].Existed | Should -BeFalse
     }
@@ -129,7 +126,7 @@ Describe 'Set-RegistryValueSafe' -Skip:(-not $script:IsWindowsHost) {
         Set-RegistryValueSafe -Path $script:TestRoot -Name 'Baseline' -Value 38 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile | Should -BeTrue
         Set-RegistryValueSafe -Path $script:TestRoot -Name 'Baseline' -Value 38 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile | Should -BeTrue
 
-        $records = Get-BackupRecord -BackupFile $ctx.BackupFile
+        $records = @(Get-BackupRecord -BackupFile $ctx.BackupFile)
         $records.Count | Should -Be 1
         $records[0].OriginalValue | Should -Be 2
     }
