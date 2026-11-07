@@ -1,23 +1,61 @@
 @echo off
 setlocal enabledelayedexpansion
-title Ultimate Windows Optimizer v6.2.0
+title Ultimate Windows Optimizer v6.2.1
 cd /d "%~dp0"
 
 :: --- Admin check -----------------------------------------------------------
+:: `net session` is the traditional elevation test, but it ALSO requires the
+:: "Server" (LanmanServer) service to be running. On many Windows 10/11
+:: installs that service is Manual or Disabled, so `net session` fails even in
+:: an elevated window - which made this launcher wrongly report "not admin".
+:: `fltmc` needs elevation but not the Server service, so it is tried first,
+:: then `net session`, then an authoritative PowerShell principal check.
+:: (Flat `goto` structure on purpose: no multi-line parenthesised blocks, so a
+:: `)` inside the PowerShell command or the install path cannot break parsing.)
+set "UWO_IS_ADMIN="
+if defined UWO_SKIP_ADMIN_CHECK set "UWO_IS_ADMIN=1"
+if defined UWO_IS_ADMIN goto :ADMIN_OK
+
+fltmc >nul 2>&1
+if not errorlevel 1 set "UWO_IS_ADMIN=1"
+if defined UWO_IS_ADMIN goto :ADMIN_OK
+
 net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo.
-    echo [ERROR] This launcher must be run as Administrator.
-    echo Right-click this file and choose "Run as administrator".
-    echo.
-    pause
-    exit /b 1
-)
+if not errorlevel 1 set "UWO_IS_ADMIN=1"
+if defined UWO_IS_ADMIN goto :ADMIN_OK
+
+powershell -NoProfile -Command "if (-not (New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 1 }" >nul 2>&1
+if not errorlevel 1 set "UWO_IS_ADMIN=1"
+if defined UWO_IS_ADMIN goto :ADMIN_OK
+
+:: Not elevated - offer to relaunch elevated once (guarded so it cannot loop).
+if defined UWO_ELEVATION_ATTEMPTED goto :NOT_ADMIN
+set "UWO_ELEVATION_ATTEMPTED=1"
+echo.
+echo This launcher needs Administrator privileges - requesting elevation...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath '%~f0' -Verb RunAs" >nul 2>&1
+if not errorlevel 1 exit /b 0
+
+:NOT_ADMIN
+echo.
+echo [ERROR] This launcher must be run as Administrator.
+echo Right-click this file and choose "Run as administrator".
+echo.
+echo If you are ALREADY running as Administrator, the check may be blocked by
+echo the "Server" (LanmanServer) service being stopped or disabled. Start it:
+echo     sc config LanmanServer start= auto
+echo     net start LanmanServer
+echo ...or set UWO_SKIP_ADMIN_CHECK=1 in this window and run the launcher again.
+echo.
+pause
+exit /b 1
+
+:ADMIN_OK
 
 :MENU
 cls
 echo =========================================================
-echo   ULTIMATE WINDOWS OPTIMIZER v6.2.0
+echo   ULTIMATE WINDOWS OPTIMIZER v6.2.1
 echo   github.com/DrSamOnline
 echo =========================================================
 echo.
