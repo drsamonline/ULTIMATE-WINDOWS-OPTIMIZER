@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.3.0 - Debloat profile and reversible scheduled-task support
+
+Feature release. Closes the biggest capability gap against the other Windows
+debloaters (Win-Debloat-Tools, win11debloat, winutil, Bloatynosy) without
+breaking this toolkit's reversibility guarantee.
+
+- **Scheduled tasks are now a backed-up, restorable record type.**
+  `Set-ScheduledTaskStateSafe` disables or enables a task, records its previous
+  state only after the change succeeds, and is idempotent like the registry and
+  service paths. `Restore-ScheduledTaskBackupRecord` puts it back, and
+  `Select-BackupRecordsToRestore` de-duplicates task records by path + name so
+  the earliest captured state wins. New `ScheduledTask` record type alongside
+  Registry, Service, Hibernation and PowerPlan.
+- **New `Debloat` profile** (launcher option `B`, `scripts/Optimize-Debloat.ps1`):
+  disables the ten canonical telemetry/CEIP tasks (Application Experience,
+  CEIP, Autochk, Disk Diagnostic, Feedback/Siuf, Windows Error Reporting) plus
+  Copilot, Recall, Bing/web search suggestions in Start, the Widgets feed,
+  activity history, the advertising ID, feedback prompts and app-launch
+  tracking.
+- **Verification extended.** New `TweakTaskMap` plus seven single-value and one
+  multi-value registry entries, so `Verify-System.ps1` can check every new tweak
+  (and the catalog test enforces that it can).
+- **Deliberately no Appx/app removal.** The debloaters this was modelled on
+  delete packages and warn that not everything can be restored; this profile
+  only changes state that undo can put back.
+
 ## v6.2.2 - Backup files no longer gain a phantom record
 
 - **Fixed: a phantom empty-array record corrupted every backup file.**

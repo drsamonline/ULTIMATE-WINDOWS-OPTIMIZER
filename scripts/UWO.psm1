@@ -546,6 +546,9 @@ function Select-BackupRecordsToRestore {
             'Service'     { $key = 'S|{0}' -f (Get-RecordProperty -Record $record -Name 'ServiceName') }
             'PowerPlan'   { $key = 'P|active' }
             'Hibernation' { $key = 'H|state' }
+            'ScheduledTask' {
+                $key = 'T|{0}{1}' -f (Get-RecordProperty -Record $record -Name 'TaskPath'), (Get-RecordProperty -Record $record -Name 'TaskName')
+            }
         }
         if ($key -and -not $seen.Add($key)) { continue }
         $kept += $record
@@ -591,6 +594,80 @@ function Restore-ServiceBackupRecord {
         Write-Log -Message "Restored service '$($Record.ServiceName)' to $mapped (was $($Record.OriginalStatus))" -LogFile $LogFile -Level OK
     } catch {
         Write-Log -Message "FAILED to restore service '$($Record.ServiceName)' : $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Scheduled tasks: safe set (backs up the previous state) + restore
+# ---------------------------------------------------------------------------
+
+function Set-ScheduledTaskStateSafe {
+    # Disables/enables a single scheduled task, backing up its previous state
+    # first. This is the one capability every serious debloater has and this
+    # toolkit lacked: the telemetry/CEIP jobs live in Task Scheduler, not in a
+    # service or a registry value. Kept reversible like everything else.
+    param(
+        [Parameter(Mandatory)][string]$TaskPath,
+        [Parameter(Mandatory)][string]$TaskName,
+        [ValidateSet('Disabled','Enabled')][string]$State = 'Disabled',
+        [Parameter(Mandatory)][string]$LogFile,
+        [Parameter(Mandatory)][string]$BackupFile
+    )
+    try {
+        $task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue
+        if (-not $task) {
+            # A task that is not present cannot run, so there is nothing to do.
+            Write-Log -Message "Scheduled task '$TaskPath$TaskName' not present - skipped" -LogFile $LogFile -Level INFO
+            return $true
+        }
+
+        $currentState = [string]$task.State
+        if ($currentState -eq $State) {
+            Write-Log -Message "Scheduled task '$TaskName' is already $State - skipped (no backup record written)" -LogFile $LogFile -Level INFO
+            return $true
+        }
+
+        if ($State -eq 'Disabled') {
+            Disable-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction Stop | Out-Null
+        } else {
+            Enable-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction Stop | Out-Null
+        }
+
+        # Record only after the change succeeded, like the registry/service paths.
+        Add-BackupRecord -BackupFile $BackupFile -Record @{
+            Type          = 'ScheduledTask'
+            TaskPath      = $TaskPath
+            TaskName      = $TaskName
+            OriginalState = $currentState
+        }
+
+        Write-Log -Message "Scheduled task '$TaskName' set to $State (was $currentState)" -LogFile $LogFile -Level INFO
+        return $true
+    } catch {
+        Write-Log -Message "FAILED to set scheduled task '$TaskName' to $State : $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
+        return $false
+    }
+}
+
+function Restore-ScheduledTaskBackupRecord {
+    param(
+        [Parameter(Mandatory)]$Record,
+        [Parameter(Mandatory)][string]$LogFile
+    )
+    try {
+        $task = Get-ScheduledTask -TaskPath $Record.TaskPath -TaskName $Record.TaskName -ErrorAction SilentlyContinue
+        if (-not $task) {
+            Write-Log -Message "Scheduled task '$($Record.TaskName)' no longer exists - nothing to restore" -LogFile $LogFile -Level WARN
+            return
+        }
+        if ($Record.OriginalState -eq 'Disabled') {
+            Disable-ScheduledTask -TaskPath $Record.TaskPath -TaskName $Record.TaskName -ErrorAction Stop | Out-Null
+        } else {
+            Enable-ScheduledTask -TaskPath $Record.TaskPath -TaskName $Record.TaskName -ErrorAction Stop | Out-Null
+        }
+        Write-Log -Message "Restored scheduled task '$($Record.TaskName)' to $($Record.OriginalState)" -LogFile $LogFile -Level OK
+    } catch {
+        Write-Log -Message "FAILED to restore scheduled task '$($Record.TaskName)' : $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
     }
 }
 
@@ -657,6 +734,22 @@ function Save-SystemSnapshot {
 # settings subgroup. These GUIDs are the documented Windows identifiers.
 $Script:UsbSubgroupGuid        = '2a737441-1930-4402-8d77-b2bebba308a3'
 $Script:UsbSuspendSettingGuid  = '48e6b7a6-50f5-4782-a5d4-53bb8f07e226'
+
+# Telemetry / CEIP scheduled tasks that every serious debloater disables. These
+# are the canonical ones (Application Experience, CEIP, Autochk, Disk Diagnostic,
+# Feedback/Siuf, Windows Error Reporting). Missing tasks are skipped.
+$Script:TelemetryTasks = @(
+    @{ Path = '\Microsoft\Windows\Application Experience\';              Name = 'Microsoft Compatibility Appraiser' }
+    @{ Path = '\Microsoft\Windows\Application Experience\';              Name = 'ProgramDataUpdater' }
+    @{ Path = '\Microsoft\Windows\Application Experience\';              Name = 'StartupAppTask' }
+    @{ Path = '\Microsoft\Windows\Autochk\';                             Name = 'Proxy' }
+    @{ Path = '\Microsoft\Windows\Customer Experience Improvement Program\'; Name = 'Consolidator' }
+    @{ Path = '\Microsoft\Windows\Customer Experience Improvement Program\'; Name = 'UsbCeip' }
+    @{ Path = '\Microsoft\Windows\DiskDiagnostic\';                      Name = 'Microsoft-Windows-DiskDiagnosticDataCollector' }
+    @{ Path = '\Microsoft\Windows\Feedback\Siuf\';                      Name = 'DmClient' }
+    @{ Path = '\Microsoft\Windows\Feedback\Siuf\';                      Name = 'DmClientOnScenarioDownload' }
+    @{ Path = '\Microsoft\Windows\Windows Error Reporting\';              Name = 'QueueReporting' }
+)
 
 function Get-UsbSelectiveSuspendKey {
     # Builds the registry path of the USB selective-suspend setting for a given
@@ -862,6 +955,59 @@ function Invoke-Tweak {
             return Set-ServiceStateSafe -ServiceName 'WSearch' -StartupType Disabled -StopNow -LogFile $LogFile -BackupFile $BackupFile
         }
 
+        'DisableTelemetryTasks' {
+            # The telemetry/CEIP jobs live in Task Scheduler, not in a service.
+            $ok = $true
+            foreach ($t in $Script:TelemetryTasks) {
+                $stepOk = Set-ScheduledTaskStateSafe -TaskPath $t.Path -TaskName $t.Name -State Disabled -LogFile $LogFile -BackupFile $BackupFile
+                if (-not $stepOk) { $ok = $false }
+            }
+            return $ok
+        }
+
+        'DisableCopilot' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Policies\Microsoft\Windows\WindowsCopilot' `
+                -Name 'TurnOffWindowsCopilot' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableRecall' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Policies\Microsoft\Windows\WindowsAI' `
+                -Name 'DisableAIDataAnalysis' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableBingSearch' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Policies\Microsoft\Windows\Explorer' `
+                -Name 'DisableSearchBoxSuggestions' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableWidgets' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Policies\Microsoft\Dsh' `
+                -Name 'AllowNewsAndInterests' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableAdvertisingId' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo' `
+                -Name 'Enabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableFeedbackRequests' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Siuf\Rules' `
+                -Name 'NumberOfSIUFInPeriod' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableAppLaunchTracking' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+                -Name 'Start_TrackProgs' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableActivityHistory' {
+            $base = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'
+            $ok1 = Set-RegistryValueSafe -Path $base -Name 'EnableActivityFeed' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            $ok2 = Set-RegistryValueSafe -Path $base -Name 'PublishUserActivities' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            $ok3 = Set-RegistryValueSafe -Path $base -Name 'UploadUserActivities' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+            return ($ok1 -and $ok2 -and $ok3)
+        }
+
         default {
             Write-Log -Message "Unknown tweak key '$Key' - skipped" -LogFile $LogFile -Level WARN
             return $false
@@ -892,6 +1038,13 @@ $Script:TweakVerificationMap = @{
     'VisualEffectsBalanced'                   = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects'; Name = 'VisualFXSetting'; Type = 'DWord'; ExpectedValue = 0 }
     'DisablePagingExecutive'                  = @{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'; Name = 'DisablePagingExecutive'; Type = 'DWord'; ExpectedValue = 1 }
     'DisableGameDVR'                          = @{ Path = 'HKCU:\System\GameConfigStore'; Name = 'GameDVR_Enabled'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableCopilot'                          = @{ Path = 'HKCU:\Software\Policies\Microsoft\Windows\WindowsCopilot'; Name = 'TurnOffWindowsCopilot'; Type = 'DWord'; ExpectedValue = 1 }
+    'DisableRecall'                           = @{ Path = 'HKCU:\Software\Policies\Microsoft\Windows\WindowsAI'; Name = 'DisableAIDataAnalysis'; Type = 'DWord'; ExpectedValue = 1 }
+    'DisableBingSearch'                       = @{ Path = 'HKCU:\Software\Policies\Microsoft\Windows\Explorer'; Name = 'DisableSearchBoxSuggestions'; Type = 'DWord'; ExpectedValue = 1 }
+    'DisableWidgets'                          = @{ Path = 'HKCU:\Software\Policies\Microsoft\Dsh'; Name = 'AllowNewsAndInterests'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableAdvertisingId'                    = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo'; Name = 'Enabled'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableFeedbackRequests'                 = @{ Path = 'HKCU:\Software\Microsoft\Siuf\Rules'; Name = 'NumberOfSIUFInPeriod'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableAppLaunchTracking'                = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; Name = 'Start_TrackProgs'; Type = 'DWord'; ExpectedValue = 0 }
 }
 
 # Tweaks that write MULTIPLE registry values (all of them must match for the
@@ -901,6 +1054,13 @@ $Script:TweakMultiRegistryMap = @{
         Values = @(
             @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SubscribedContent-338388Enabled'; Type = 'DWord'; ExpectedValue = 0 }
             @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SystemPaneSuggestionsEnabled';    Type = 'DWord'; ExpectedValue = 0 }
+        )
+    }
+    'DisableActivityHistory' = @{
+        Values = @(
+            @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'; Name = 'EnableActivityFeed';     Type = 'DWord'; ExpectedValue = 0 }
+            @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'; Name = 'PublishUserActivities'; Type = 'DWord'; ExpectedValue = 0 }
+            @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\System'; Name = 'UploadUserActivities';  Type = 'DWord'; ExpectedValue = 0 }
         )
     }
 }
@@ -919,6 +1079,11 @@ $Script:TweakMultiServiceMap = @{
         ServiceNames = @('XblAuthManager','XblGameSave','XboxNetApiSvc','XboxGipSvc')
         ExpectedStartMode = 'Disabled'
     }
+}
+
+# Tweaks that map to scheduled tasks (all must be Disabled for 'Applied').
+$Script:TweakTaskMap = @{
+    'DisableTelemetryTasks' = @{ Tasks = $Script:TelemetryTasks; ExpectedState = 'Disabled' }
 }
 
 # Tweaks verified via powercfg (parsed at runtime in Verify-System.ps1).
@@ -944,6 +1109,7 @@ $Script:ProfileDefinitions = @{
     'Godlike'    = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance','DisableHibernation','DisableSearchIndexingService','DisableXboxServices','DisablePagingExecutive','DisableSysMain')
     'Server'     = @('DisableTelemetry','DisableSearchIndexingService','DisableXboxServices','DisableHibernation','PowerPlanHighPerformance','VisualEffectsBestPerformance','ServerPrioritySeparation')
     'Streaming'  = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','LowerSystemResponsivenessForMultimedia','PowerPlanHighPerformance','VisualEffectsBestPerformance')
+    'Debloat'    = @('DisableTelemetry','DisableTelemetryTasks','DisableCopilot','DisableRecall','DisableBingSearch','DisableWidgets','DisableActivityHistory','DisableAdvertisingId','DisableFeedbackRequests','DisableAppLaunchTracking')
 }
 
 # ---------------------------------------------------------------------------
@@ -955,6 +1121,7 @@ function Get-TweakMultiRegistryMap { return $Script:TweakMultiRegistryMap }
 function Get-TweakServiceMap       { return $Script:TweakServiceMap }
 function Get-TweakMultiServiceMap  { return $Script:TweakMultiServiceMap }
 function Get-TweakPowerPlanMap     { return $Script:TweakPowerPlanMap }
+function Get-TweakTaskMap          { return $Script:TweakTaskMap }
 function Get-TweakRuntimeMap       { return $Script:TweakRuntimeMap }
 function Get-ProfileDefinition     { return $Script:ProfileDefinitions }
 function Get-ProfileName           { return @($Script:ProfileDefinitions.Keys | Sort-Object) }
@@ -1041,6 +1208,8 @@ Export-ModuleMember -Function @(
     'Get-ServiceStartMode'
     'Set-ServiceStateSafe'
     'Restore-ServiceBackupRecord'
+    'Set-ScheduledTaskStateSafe'
+    'Restore-ScheduledTaskBackupRecord'
     'Invoke-NativeCommand'
     'Get-PowerSchemeGuid'
     'Get-ActivePowerSchemeGuid'
@@ -1054,6 +1223,7 @@ Export-ModuleMember -Function @(
     'Get-TweakServiceMap'
     'Get-TweakMultiServiceMap'
     'Get-TweakPowerPlanMap'
+    'Get-TweakTaskMap'
     'Get-TweakRuntimeMap'
     'Get-ProfileDefinition'
     'Get-ProfileName'

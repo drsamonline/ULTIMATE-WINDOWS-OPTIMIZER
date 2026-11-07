@@ -24,6 +24,7 @@ $multiRegistryMap     = Get-TweakMultiRegistryMap
 $serviceMap           = Get-TweakServiceMap
 $multiServiceMap      = Get-TweakMultiServiceMap
 $powerPlanMap         = Get-TweakPowerPlanMap
+$taskMap              = Get-TweakTaskMap
 
 if (-not $ProfileName -or -not $profileDefinitions.ContainsKey($ProfileName)) {
     Write-Host "Available profiles: $((Get-ProfileName) -join ', ')" -ForegroundColor Cyan
@@ -110,6 +111,19 @@ foreach ($tweak in $tweaks) {
         } else {
             $status = 'Applied'
         }
+        $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
+    }
+    elseif ($taskMap.ContainsKey($tweak)) {
+        # Scheduled-task tweak: every listed task must be in the expected state.
+        # A task that is not present cannot run, so it counts as satisfied.
+        $spec = $taskMap[$tweak]
+        $stillEnabled = @()
+        foreach ($t in $spec.Tasks) {
+            $task = Get-ScheduledTask -TaskPath $t.Path -TaskName $t.Name -ErrorAction SilentlyContinue
+            if (-not $task) { continue }
+            if ([string]$task.State -ne $spec.ExpectedState) { $stillEnabled += "$($t.Name)=$($task.State)" }
+        }
+        $status = if ($stillEnabled.Count -eq 0) { 'Applied' } else { "Not Applied (still enabled: $($stillEnabled -join ', '))" }
         $results += [pscustomobject]@{ Tweak = $tweak; Status = $status }
     }
     elseif ($powerPlanMap.ContainsKey($tweak)) {

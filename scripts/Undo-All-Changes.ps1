@@ -95,6 +95,7 @@ foreach ($record in $recordsToRestore) {
         switch ($record.Type) {
             'Registry' { Restore-RegistryBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
             'Service'  { Restore-ServiceBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
+            'ScheduledTask' { Restore-ScheduledTaskBackupRecord -Record $record -LogFile $logFile; $restoredCount++ }
             'Hibernation' {
                 # Restore the state captured at apply time (default 'enabled'
                 # for records written by older versions that did not record it).

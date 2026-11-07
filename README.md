@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge&labelColor=0a110c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
-[![Version](https://img.shields.io/badge/version-6.2.2-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.3.0-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
 [![No Telemetry](https://img.shields.io/badge/telemetry-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 [![No Network](https://img.shields.io/badge/network%20calls-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 
@@ -64,6 +64,7 @@ measure your own real before/after numbers with `Compare-Results.ps1`.
 - [Quick start](#quick-start)
 - [Profiles — what each one actually does differently](#profiles--what-each-one-actually-does-differently)
 - [Utilities](#utilities)
+- [What's new in v6.3.0](#whats-new-in-v630)
 - [What's new in v6.2.0](#whats-new-in-v620)
 - [Safety notes](#safety-notes)
 - [Development](#development)
@@ -123,6 +124,7 @@ measure your own real before/after numbers with `Compare-Results.ps1`.
 | **Godlike** | Everything in Extreme + Windows Search indexing disabled + Xbox services disabled. **Requires typing `CONFIRM`** because it trades away Start-menu/file search speed | Desktop enthusiast machines only |
 | **Server** | Disables Search indexing and Xbox services, removes hibernation, favors background-service CPU priority over foreground apps (opposite of Gaming) | No GPU/gaming tweaks |
 | **Streaming** | Gaming-profile tweaks + `SystemResponsiveness` lowered so capture/encoding software isn't CPU-starved by the foreground game | - |
+| **Debloat** | Telemetry/CEIP **scheduled tasks** off, Copilot and Recall off, Bing/web suggestions in Start off, Widgets feed off, activity history + advertising ID + feedback prompts + app-launch tracking off | Uninstalls nothing - no Appx or app removal, unlike most debloat scripts |
 
 Full tweak definitions live in `scripts/UWO.psm1` under `Invoke-Tweak` and the
 profile catalog, which is the **single source of truth** for what each profile
@@ -154,6 +156,25 @@ run (and `Verify-System.ps1` will then correctly report them as "Not Applied").
 - **Cleanup-Backups.ps1** (menu `P`) — prunes old backup JSON files that would otherwise accumulate forever. Conservative by design: a file is deleted only if it is **both** outside the newest 20 files **and** older than 30 days, and backups that have not been undone yet are never touched unless you pass `-IncludePending`. Use `-WhatIf` to preview, `-KeepCount`/`-MaxAgeDays` to change the thresholds; everything pruned is logged
 
 ---
+
+## What's new in v6.3.0
+
+A feature release that closes the biggest gap against other Windows debloaters
+while keeping this toolkit's one hard promise: **everything is reversible.**
+
+- **Scheduled tasks are now first-class.** Telemetry and CEIP jobs live in Task
+  Scheduler, not in a service or a registry value, so no previous version could
+  touch them. New `Set-ScheduledTaskStateSafe` / `Restore-ScheduledTaskBackupRecord`
+  disable a task, record its previous state, and put it back on undo - a new
+  `ScheduledTask` backup record type alongside Registry, Service, Hibernation and
+  PowerPlan.
+- **New `Debloat` profile** (launcher option `B`): disables the ten canonical
+  telemetry tasks, plus Copilot, Recall, Bing/web search suggestions in Start,
+  the Widgets feed, activity history, the advertising ID, feedback prompts and
+  app-launch tracking.
+- **No app removal, by design.** The well-known debloaters delete Appx packages
+  and warn that "not every feature removed can be easily restored". This one
+  changes state that can be restored, and says so.
 
 ## What's new in v6.2.0
 

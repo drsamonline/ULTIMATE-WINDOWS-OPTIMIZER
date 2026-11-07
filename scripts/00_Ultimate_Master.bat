@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Ultimate Windows Optimizer v6.2.2
+title Ultimate Windows Optimizer v6.3.0
 cd /d "%~dp0"
 
 :: --- Admin check -----------------------------------------------------------
@@ -55,7 +55,7 @@ exit /b 1
 :MENU
 cls
 echo =========================================================
-echo   ULTIMATE WINDOWS OPTIMIZER v6.2.2
+echo   ULTIMATE WINDOWS OPTIMIZER v6.3.0
 echo   github.com/DrSamOnline
 echo =========================================================
 echo.
@@ -70,6 +70,7 @@ echo   [5] Extreme          - aggressive, hardware-gated (desktop)
 echo   [6] Godlike          - maximum aggression, requires confirmation
 echo   [7] Server           - headless/background-service machines
 echo   [8] Streaming        - gaming + capture/streaming software
+echo   [B] Debloat          - privacy + telemetry tasks (reversible)
 echo.
 echo   UTILITIES
 echo   [9]  Compatibility Check       [C] Cleanup System (real space freed)
@@ -117,6 +118,10 @@ if /i "%choice%"=="7" (
 )
 if /i "%choice%"=="8" (
     powershell -NoProfile -ExecutionPolicy Bypass -File "Optimize-Streaming.ps1"
+    goto PAUSE_MENU
+)
+if /i "%choice%"=="B" (
+    powershell -NoProfile -ExecutionPolicy Bypass -File "Optimize-Debloat.ps1"
     goto PAUSE_MENU
 )
 if /i "%choice%"=="9" (

@@ -45,6 +45,7 @@ Describe 'Profile catalog' {
                       @((Get-TweakServiceMap).Keys) +
                       @((Get-TweakMultiServiceMap).Keys) +
                       @((Get-TweakPowerPlanMap).Keys) +
+                      @((Get-TweakTaskMap).Keys) +
                       @('DisableHibernation','EnableUSBSelectiveSuspend')
         foreach ($name in Get-ProfileName) {
             foreach ($tweak in Get-ProfileTweak -ProfileName $name) {
@@ -138,6 +139,17 @@ Describe 'Select-BackupRecordsToRestore (oldest original wins)' {
         $kept = @(Select-BackupRecordsToRestore -Records $records)
         $kept.Count | Should -Be 2
         @($kept | Where-Object { $_.Type -eq 'PowerPlan' }).OriginalGuid | Should -Be '381b4222-f694-41f0-9685-ff5bb260df2e'
+    }
+
+    It 'de-duplicates scheduled-task records per task, keeping the earliest' {
+        $records = @(
+            [pscustomobject]@{ Type = 'ScheduledTask'; TaskPath = '\Microsoft\Windows\X\'; TaskName = 'A'; OriginalState = 'Ready' }
+            [pscustomobject]@{ Type = 'ScheduledTask'; TaskPath = '\Microsoft\Windows\X\'; TaskName = 'A'; OriginalState = 'Disabled' }
+            [pscustomobject]@{ Type = 'ScheduledTask'; TaskPath = '\Microsoft\Windows\X\'; TaskName = 'B'; OriginalState = 'Ready' }
+        )
+        $kept = @(Select-BackupRecordsToRestore -Records $records)
+        $kept.Count | Should -Be 2
+        @($kept | Where-Object { $_.TaskName -eq 'A' }).OriginalState | Should -Be 'Ready'
     }
 
     It 'tolerates an empty record set' {
