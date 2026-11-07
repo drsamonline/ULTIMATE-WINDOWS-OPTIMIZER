@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge&labelColor=0a110c)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-22c55e?style=for-the-badge&labelColor=0a110c)](#requirements)
-[![Version](https://img.shields.io/badge/version-6.2.1-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-6.2.2-4ade80?style=for-the-badge&labelColor=0a110c)](CHANGELOG.md)
 [![No Telemetry](https://img.shields.io/badge/telemetry-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 [![No Network](https://img.shields.io/badge/network%20calls-none-22c55e?style=for-the-badge&labelColor=0a110c)](#safety-notes)
 

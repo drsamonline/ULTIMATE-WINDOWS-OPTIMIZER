@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v6.2.2 - Backup files no longer gain a phantom record
 
 - **Fixed: a phantom empty-array record corrupted every backup file.**
   Windows PowerShell 5.1's `ConvertFrom-Json` writes a JSON array to the
@@ -17,6 +17,11 @@
   the suite was added; the suite is now 40/40 green.
 - **Test fix:** record-count assertions are wrapped in `@()` so an empty
   result counts as 0 and a single record does not unroll to a scalar.
+- **Version is enforced.** `tests/UWO.Version.Tests.ps1` fails the build unless
+  every artefact that states a version agrees with `VERSION` (12 places across
+  the module manifest, launcher, quick start, README and site).
+- **`tools/bump-version.py`** sets `VERSION` and propagates it to all of them
+  in one command, preserving line endings.
 
 ## v6.2.1 - Launcher admin check fixed; version reconciled
 
