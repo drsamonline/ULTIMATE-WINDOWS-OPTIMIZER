@@ -1016,6 +1016,36 @@ function Invoke-Tweak {
             return ($ok1 -and $ok2 -and $ok3)
         }
 
+        'DisableConsumerFeatures' {
+            return Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent' `
+                -Name 'DisableWindowsConsumerFeatures' -Value 1 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableTelemetryPolicy' {
+            return Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
+                -Name 'AllowTelemetry' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableCortana' {
+            return Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search' `
+                -Name 'AllowCortana' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableDeliveryOptimizationP2P' {
+            return Set-RegistryValueSafe -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization' `
+                -Name 'DODownloadMode' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableLockScreenAds' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager' `
+                -Name 'RotatingLockScreenOverlayEnabled' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
+        'DisableSyncProviderNotifications' {
+            return Set-RegistryValueSafe -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+                -Name 'ShowSyncProviderNotifications' -Value 0 -Type DWord -LogFile $LogFile -BackupFile $BackupFile
+        }
+
         default {
             Write-Log -Message "Unknown tweak key '$Key' - skipped" -LogFile $LogFile -Level WARN
             return $false
@@ -1053,6 +1083,12 @@ $Script:TweakVerificationMap = @{
     'DisableAdvertisingId'                    = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo'; Name = 'Enabled'; Type = 'DWord'; ExpectedValue = 0 }
     'DisableFeedbackRequests'                 = @{ Path = 'HKCU:\Software\Microsoft\Siuf\Rules'; Name = 'NumberOfSIUFInPeriod'; Type = 'DWord'; ExpectedValue = 0 }
     'DisableAppLaunchTracking'                = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; Name = 'Start_TrackProgs'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableConsumerFeatures'                 = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent'; Name = 'DisableWindowsConsumerFeatures'; Type = 'DWord'; ExpectedValue = 1 }
+    'DisableTelemetryPolicy'                  = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection'; Name = 'AllowTelemetry'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableCortana'                          = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search'; Name = 'AllowCortana'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableDeliveryOptimizationP2P'          = @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeliveryOptimization'; Name = 'DODownloadMode'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableLockScreenAds'                    = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'RotatingLockScreenOverlayEnabled'; Type = 'DWord'; ExpectedValue = 0 }
+    'DisableSyncProviderNotifications'        = @{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; Name = 'ShowSyncProviderNotifications'; Type = 'DWord'; ExpectedValue = 0 }
 }
 
 # Tweaks that write MULTIPLE registry values (all of them must match for the
@@ -1117,7 +1153,7 @@ $Script:ProfileDefinitions = @{
     'Godlike'    = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','DisableGameDVR','PowerPlanHighPerformance','VisualEffectsBestPerformance','DisableHibernation','DisableSearchIndexingService','DisableXboxServices','DisablePagingExecutive','DisableSysMain')
     'Server'     = @('DisableTelemetry','DisableSearchIndexingService','DisableXboxServices','DisableHibernation','PowerPlanHighPerformance','VisualEffectsBestPerformance','ServerPrioritySeparation')
     'Streaming'  = @('DisableTelemetry','EnableHAGS','GamingPriorityBoost','DisableNetworkThrottling','LowerSystemResponsivenessForMultimedia','PowerPlanHighPerformance','VisualEffectsBestPerformance')
-    'Debloat'    = @('DisableTelemetry','DisableTelemetryTasks','DisableCopilot','DisableRecall','DisableBingSearch','DisableWidgets','DisableActivityHistory','DisableAdvertisingId','DisableFeedbackRequests','DisableAppLaunchTracking')
+    'Debloat'    = @('DisableTelemetry','DisableTelemetryPolicy','DisableTelemetryTasks','DisableConsumerFeatures','DisableCopilot','DisableRecall','DisableBingSearch','DisableWidgets','DisableCortana','DisableActivityHistory','DisableAdvertisingId','DisableFeedbackRequests','DisableAppLaunchTracking','DisableLockScreenAds','DisableSyncProviderNotifications','DisableDeliveryOptimizationP2P')
 }
 
 # ---------------------------------------------------------------------------

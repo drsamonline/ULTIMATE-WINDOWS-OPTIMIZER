@@ -1,5 +1,31 @@
 # Changelog
 
+## v6.5.0 - Wider Debloat profile, borrowed from Sophia Script and winutil
+
+The Debloat profile grows from 10 tweaks to 16, taking the settings those
+projects apply as *policy* rather than the consumer toggles this toolkit already
+had. Catalogue is now 37 tweaks across 9 profiles.
+
+- `DisableConsumerFeatures` - `CloudContent\DisableWindowsConsumerFeatures`
+- `DisableTelemetryPolicy` - `DataCollection\AllowTelemetry` (alongside the
+  existing DiagTrack service change)
+- `DisableCortana` - `Windows Search\AllowCortana`
+- `DisableDeliveryOptimizationP2P` - `DeliveryOptimization\DODownloadMode = 0`,
+  so the machine stops uploading update chunks to strangers
+- `DisableLockScreenAds` - `ContentDeliveryManager\RotatingLockScreenOverlayEnabled`
+- `DisableSyncProviderNotifications` - `Explorer\Advanced\ShowSyncProviderNotifications`
+
+All six are single documented registry values, so they go through
+`Set-RegistryValueSafe` and are backed up and restored like everything else.
+Six verification entries added; the catalog test still enforces that every
+profile tweak is both implemented and verifiable.
+
+Not adopted from these links, and why: **CompactGUI**'s WOF/CompactOS
+compaction is a good idea, but detecting the current state means parsing
+localized `compact.exe` output - the exact class of bug fixed in v6.4.1 - so it
+needs a locale-safe detection path first. **7-Zip-zstd** is an archive tool and
+has nothing to contribute to a tweaking toolkit.
+
 ## v6.4.3 - The last three audit findings
 
 - **Scheduled-task restore no longer loses a running task.** Re-enabling a task
