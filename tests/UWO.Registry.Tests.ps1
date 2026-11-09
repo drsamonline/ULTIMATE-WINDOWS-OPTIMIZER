@@ -157,6 +157,22 @@ Describe 'Restore-RegistryBackupRecord' -Skip:(-not $script:IsWindowsHost) {
         Test-Path $newKey | Should -BeFalse
     }
 
+    It 'throws when the write does not land, instead of reporting success' {
+        # A write that returns without error is not proof the key holds what was
+        # recorded - a policy or a redirected key can leave the old value in
+        # place. The restore reads the value back and must fail loudly; it used
+        # to log OK and be counted as restored by Undo-All-Changes.ps1.
+        $ctx = New-TestContext
+        New-ItemProperty -Path $script:TestRoot -Name 'Stuck' -Value 3 -PropertyType DWord -Force | Out-Null
+        Set-RegistryValueSafe -Path $script:TestRoot -Name 'Stuck' -Value 9 -Type DWord -LogFile $ctx.LogFile -BackupFile $ctx.BackupFile | Out-Null
+        $record = @(Get-BackupRecord -BackupFile $ctx.BackupFile)[0]
+
+        # The write is swallowed: the value stays at 9, so the read-back must catch it.
+        Mock -CommandName New-ItemProperty -ModuleName UWO -MockWith { }
+
+        { Restore-RegistryBackupRecord -Record $record -LogFile $ctx.LogFile } | Should -Throw '*does not match*'
+    }
+
     It 'keeps a created key that is no longer empty' {
         $ctx = New-TestContext
         $newKey = Join-Path $script:TestRoot 'StillUsed'
