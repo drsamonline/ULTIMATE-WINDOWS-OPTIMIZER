@@ -303,6 +303,21 @@ both run automatically on `windows-latest` under Windows PowerShell 5.1 in CI
 
 ---
 
+<!-- support:sweep -->
+## Support
+
+One person's work: no company, no ads, no tracking, no paid tier. If it saved you an
+afternoon, a contribution keeps the next one coming — any amount, or none.
+
+| | |
+|---|---|
+| **UPI** | `drsohilboi@ybl` |
+| **Ko-fi** | [ko-fi.com/matneo](https://ko-fi.com/matneo) |
+| **PayPal** | [paypal.me/drsohilmomin](https://paypal.me/drsohilmomin?locale.x=en_GB&country.x=IN) |
+| **Books** | [the author's other work](https://www.amazon.com/stores/author/B08ZT331LY/allbooks) |
+| **Elsewhere** | [all projects](https://drsamonline.github.io/) |
+| **Email** | [sohilmomin2000@gmail.com](mailto:sohilmomin2000@gmail.com) — bugs, corrections, requests |
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE). The copyright notice — © 2026 Dr. Sohil Momin — must be
