@@ -374,29 +374,43 @@ function Set-RegistryValueSafe {
 }
 
 function Restore-RegistryBackupRecord {
+    <#
+        Restores one registry value and PROVES it landed.
+
+        A write that returned without error is not evidence that the key now
+        holds what was recorded: a policy, a redirected key or a type coercion
+        can leave something else in place. Every value is therefore read back and
+        compared, and a mismatch throws - the caller counts it as failed rather
+        than reporting "restored". Errors are no longer swallowed here for the
+        same reason: a swallowed failure used to be counted as a success by
+        Undo-All-Changes.ps1.
+    #>
     param(
         [Parameter(Mandatory)]$Record,
         [Parameter(Mandatory)][string]$LogFile
     )
-    try {
-        if ($Record.Existed) {
-            New-ItemProperty -Path $Record.Path -Name $Record.Name -Value $Record.OriginalValue -PropertyType $Record.ValueType -Force | Out-Null
-            Write-Log -Message "Restored $($Record.Path)\$($Record.Name) to original value ($($Record.OriginalValue))" -LogFile $LogFile -Level OK
-        } else {
-            if (Test-Path $Record.Path) {
-                Remove-ItemProperty -Path $Record.Path -Name $Record.Name -ErrorAction SilentlyContinue
-                Write-Log -Message "Removed $($Record.Path)\$($Record.Name) (did not exist before optimization)" -LogFile $LogFile -Level OK
+    if ($Record.Existed) {
+        New-ItemProperty -Path $Record.Path -Name $Record.Name -Value $Record.OriginalValue -PropertyType $Record.ValueType -Force | Out-Null
+        $now = (Get-ItemProperty -Path $Record.Path -Name $Record.Name -ErrorAction Stop).$($Record.Name)
+        if ([string]$now -ne [string]$Record.OriginalValue) {
+            throw "restored value does not match: '$now', expected '$($Record.OriginalValue)'"
+        }
+        Write-Log -Message "Restored $($Record.Path)\$($Record.Name) to original value ($($Record.OriginalValue)) - read back and verified" -LogFile $LogFile -Level OK
+    } else {
+        if (Test-Path $Record.Path) {
+            Remove-ItemProperty -Path $Record.Path -Name $Record.Name -ErrorAction SilentlyContinue
+            if ($null -ne (Get-ItemProperty -Path $Record.Path -Name $Record.Name -ErrorAction SilentlyContinue)) {
+                throw "value is still present after removal"
+            }
+            Write-Log -Message "Removed $($Record.Path)\$($Record.Name) (did not exist before optimization) - read back and verified" -LogFile $LogFile -Level OK
 
-                # The key itself was created by this toolkit: remove it too,
-                # but only if nothing else was added to it in the meantime.
-                if ((Get-RecordProperty -Record $Record -Name 'KeyCreated' -Default $false) -and (Test-RegistryKeyEmpty -Path $Record.Path)) {
-                    Remove-Item -Path $Record.Path -Force
-                    Write-Log -Message "Removed registry key $($Record.Path) (created by this toolkit and now empty)" -LogFile $LogFile -Level OK
-                }
+            # The key itself was created by this toolkit: remove it too,
+            # but only if nothing else was added to it in the meantime.
+            if ((Get-RecordProperty -Record $Record -Name 'KeyCreated' -Default $false) -and (Test-RegistryKeyEmpty -Path $Record.Path)) {
+                Remove-Item -Path $Record.Path -Force
+                Write-Log -Message "Removed registry key $($Record.Path) (created by this toolkit and now empty)" -LogFile $LogFile -Level OK
             }
         }
-    } catch {
-        Write-Log -Message "FAILED to restore $($Record.Path)\$($Record.Name) : $($_.Exception.Message)" -LogFile $LogFile -Level ERROR
     }
 }
 
