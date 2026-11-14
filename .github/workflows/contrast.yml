@@ -1,0 +1,20 @@
+name: contrast
+
+# A button label that matches its own surface is a defect, not a style: one theme
+# renders it invisible. Eighteen pages in this fleet shipped that, independently,
+# because nothing checked. This runs the real page in real Chromium, both themes,
+# and fails on anything under 4.5:1.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  contrast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Chromium
+        run: sudo apt-get update && sudo apt-get install -y chromium
+      - name: Button contrast, both themes
+        run: node tools/check-contrast.cjs
